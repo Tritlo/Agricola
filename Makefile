@@ -1,6 +1,10 @@
+run: build
+	cabal run
 
+build: sandbox
+	cabal build
 
-serve: build
+serve: hastebuild
 	.cabal-sandbox/bin/warp -d src
 	sleep 3
 
@@ -12,7 +16,7 @@ autoreload:
 watch:
 	ls src/Agricola.hs | entr -r make autoreload
 
-build: boothaste
+hastebuild: boothaste
 	.cabal-sandbox/bin/hastec -Wall -fno-warn-unused-do-bind src/Agricola.hs
 	rm src/Agricola.o
 
@@ -21,4 +25,4 @@ boothaste: sandbox
 
 sandbox:
 	cabal sandbox init
-	cabal install --only-dependencies
+	cabal install -j4 --only-dependencies
