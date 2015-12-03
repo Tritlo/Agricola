@@ -1,0 +1,8 @@
+dist
+.cabal-sandbox
+*.jsmod
+*.hi
+*.o
+cabal.config
+cabal.sandbox.config
+Agricola.js
