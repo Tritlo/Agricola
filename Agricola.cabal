@@ -60,6 +60,7 @@ executable Agricola
   build-depends:       base >=4.8 && <4.9,
                        QuickCheck >= 2.8,
                        lens >= 4.13,
+                       mtl >= 2.2.1,
                        ncurses >= 0.2.14
 
 
