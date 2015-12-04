@@ -5,6 +5,7 @@ module Main where
 -- import Haste
 
 import Control.Lens
+import Data.Either
 import Data.List
 import Data.Char
 import Data.Maybe
@@ -39,21 +40,21 @@ data Border = ABorder | NoBorder
 
 
 
-data Row = Row { _tiles :: [Tile], _borders :: [Border]}
-makeLenses ''Row
+-- data Row = Row { _tile :: [Tile], _borders :: [Border]}
+-- makeLenses ''Row
 
-instance Show Row where
-  show (Row (t:ts) (b:bs)) = show b ++ show t ++ show (Row ts bs)
-  show (Row [] [b]) = show b
-  show _ = error "too many borders"
+-- instance Show Row where
+--   show (Row (t:ts) (b:bs)) = show b ++ show t ++ show (Row ts bs)
+--   show (Row [] [b]) = show b
+--   show _ = error "too many borders"
 
 instance Show Border where
   show ABorder = "+"
   show NoBorder = "."
 
 
-data Board = Board { _rows :: [Row], _vborders :: [[Border]]} deriving (Show)
-makeLenses ''Board
+-- data Board = Board { _rows :: [Row], _vborders :: [[Border]]} deriving (Show)
+-- makeLenses ''Board
 
 
 emptyTile :: Tile
@@ -62,37 +63,89 @@ emptyTile = Tile Nothing Nothing False
 
 
 showBoard :: Board -> String
-showBoard (Board  [] []) = ""
-showBoard (Board (row:rows) (vertborders:borders)) =
-  concatMap show vertborders ++ "\n"
-  ++ show row ++ "\n" ++ showBoard (Board rows borders)
-showBoard (Board [] [vborder]) = concatMap show vborder
-showBoard (Board _ _) = error "Too many borders"
+showBoard (Board  []) = ""
+showBoard (Board (row:rows)) = concatMap (either show show) row ++ "\n" ++ showBoard (Board rows)
+
+type BoardLoc = Either Tile Border
+data Board = Board {_rows :: [[BoardLoc]]} deriving (Show)
+
+makeLenses ''Board
 
 
-emptyRow :: Row
-emptyRow = Row (replicate 3 emptyTile) (replicate 4 NoBorder)
+showRow :: [BoardLoc] -> String
+showRow = concatMap (either show show) 
+
+
+tilesAndBorders :: Board -> ([[Tile]], [[Border]])
+tilesAndBorders b = (_tiles b, _borders b)
+
+boardFromPair :: ([[Tile]], [[Border]]) -> Board
+boardFromPair (ts:tss, bs:bss) = Board $ [ map Right bs, map Left ts] ++ restRows
+  where (Board restRows) = boardFromPair (tss,bss)
+boardFromPair ([],[]) = error "too many tiles"
+boardFromPair ([], [lastborder]) = Board [map Right lastborder]
+
+
+
+_borders :: Board -> [[Border]]
+_borders = filter (not . null)  . map rights  .  _rows
+
+_tiles :: Board -> [[Tile]]
+_tiles = filter (not . null)  . map lefts  .  _rows
+
+_setBorders :: Board -> [[Border]] -> Board
+_setBorders board newborders = boardFromPair (tiles,newborders)
+  where (tiles,borders) = tilesAndBorders board
+
+_setTiles ::  Board -> [[Tile]] -> Board
+_setTiles board newtiles = boardFromPair (newtiles,borders)
+  where (tiles,borders) = tilesAndBorders board
+
+
+
+updateTile :: Int -> Int -> (Tile -> Tile) -> [[Tile]] -> [[Tile]]
+updateTile n m = over (element n . element m)
+
+updateBuilding :: Maybe Building -> Tile -> Tile
+updateBuilding build (Tile _ t1 t2)  = Tile build t1 t2
+
+setToFarmHouse = updateTile 0 1 $  updateBuilding $  Just FarmHouse
+
+
+
+
+tiles :: Lens' Board [[Tile]]
+tiles = lens _tiles _setTiles
+
+borders :: Lens' Board [[Border]]
+borders = lens _borders _setBorders
+
+emptyRow :: [BoardLoc]
+emptyRow = [ Right NoBorder
+           , Left emptyTile
+           , Right NoBorder
+           , Left emptyTile
+           , Right NoBorder
+           , Left emptyTile
+           , Right NoBorder
+            ]
+
+emptyVertBorder :: [BoardLoc]
+emptyVertBorder = replicate 3 $ Right NoBorder
+
 emptyBoard :: Board
-emptyBoard = Board (replicate 2 emptyRow) (replicate 3 $ replicate 3 NoBorder)
+emptyBoard = Board [ emptyVertBorder
+                   , emptyRow
+                   , emptyVertBorder
+                   , emptyRow
+                   , emptyVertBorder
+                   ]
 
 
-pathToTile :: (Applicative f, Indexable Int p) =>
-              Int -> Int ->  p Tile (f Tile) -> Board -> f Board
-pathToTile n m = rows . element n . tiles . element m
 
-
-updateBuilding :: Board -> Int -> Int -> Maybe Building -> Board
-updateBuilding board n m build = pathToTile n m . building .~ build $ board
-
+-- Sama og over tiles setToFarmHouse emptyBoard
 startingBoard :: Board
-startingBoard = updateBuilding emptyBoard 0 1 $ Just FarmHouse
-
-
-data Direction = North | South | East | West deriving (Eq)
-
-updateBorder :: Board -> Int -> Int -> Direction -> Border -> Board
-updateBorder board n m dir bord = undefined
-
+startingBoard = emptyBoard & tiles %~ setToFarmHouse
 
 -- data Animals = Animals { sheep   :: Int
 --                        , pigs    :: Int
@@ -118,7 +171,8 @@ drawLines n m (l:ls) = do
     drawString l
     drawLines (n+1) m ls
 
-    
+
+
 
 
 main :: IO ()
@@ -128,7 +182,7 @@ main = runCurses $ do
     updateWindow w $ do
         moveCursor 1 10
         drawString "Hello qt3.14!"
-        end <- drawLines 3 10 $ lines $ showBoard startingBoard
+        end <- drawLines 3 10 $ lines $ showBoard emptyBoard
         moveCursor (end + 1) 10
         drawString "(press q to quit)"
         moveCursor 0 0
@@ -144,7 +198,3 @@ waitFor w p = loop where
             Just ev' -> if p ev' then return () else loop
 
 
--- main :: IO()
--- main = do
---   mapM_ putStrLn $ lines $ showBoard emptyBoard
---   putStrLn "Hello, baby"
