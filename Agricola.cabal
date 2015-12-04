@@ -58,7 +58,9 @@ executable Agricola
   
   -- Other library packages from which modules are imported.
   build-depends:       base >=4.8 && <4.9,
-                       lens >= 4.13
+                       QuickCheck >= 2.8,
+                       lens >= 4.13,
+                       ncurses >= 0.2.14
 
 
                                      

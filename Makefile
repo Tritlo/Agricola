@@ -25,4 +25,5 @@ boothaste: sandbox
 
 sandbox:
 	cabal sandbox init
+	# cabal install c2hs
 	cabal install -j4 --only-dependencies

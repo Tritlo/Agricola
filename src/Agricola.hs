@@ -5,11 +5,17 @@ module Main where
 -- import Haste
 
 import Control.Lens
+import Data.List
+import Data.Char
+import Data.Maybe
+import Test.QuickCheck
+import UI.NCurses
 
-data Color = Red | Blue
 
 
 
+
+data AgricolaColor = Red | Blue
 
 data Building = Stall | Stable | FarmHouse |
                 HalfTimberedHouse | Storage | Shelter |
@@ -105,9 +111,40 @@ updateBorder board n m dir bord = undefined
 
 data Piece = Worker Color | Border | Animal | Good | Trough
 
+drawLines :: Integer -> Integer -> [String] -> Update Integer
+drawLines n _ [] = return n
+drawLines n m (l:ls) = do
+    moveCursor n m
+    drawString l
+    drawLines (n+1) m ls
+
+    
 
 
-main :: IO()
-main = do
-  mapM_ putStrLn $ lines $ showBoard emptyBoard
-  putStrLn "Hello, baby"
+main :: IO ()
+main = runCurses $ do
+    setEcho False
+    w <- defaultWindow
+    updateWindow w $ do
+        moveCursor 1 10
+        drawString "Hello qt3.14!"
+        end <- drawLines 3 10 $ lines $ showBoard startingBoard
+        moveCursor (end + 1) 10
+        drawString "(press q to quit)"
+        moveCursor 0 0
+    render
+    waitFor w (\ev -> ev == EventCharacter 'q' || ev == EventCharacter 'Q')
+
+waitFor :: Window -> (Event -> Bool) -> Curses ()
+waitFor w p = loop where
+    loop = do
+        ev <- getEvent w Nothing
+        case ev of
+            Nothing -> loop
+            Just ev' -> if p ev' then return () else loop
+
+
+-- main :: IO()
+-- main = do
+--   mapM_ putStrLn $ lines $ showBoard emptyBoard
+--   putStrLn "Hello, baby"
