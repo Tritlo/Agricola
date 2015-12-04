@@ -18,6 +18,7 @@ import qualified UI.NCurses as NC
 
 
 
+type Coord = (Integer, Integer)
 
 data Color = Red | Blue deriving (Show)
 
@@ -25,19 +26,33 @@ data Animals = Animals { _sheep   :: Int
                        , _pigs    :: Int
                        , _cows    :: Int
                        , _horses  :: Int
-                       } deriving (Show)
+                       }
 makeLenses ''Animals
 
 emptyAnimals :: Animals
 emptyAnimals = Animals 0 0 0 0
+
+instance Show Animals where
+  show (Animals sh pi co ho) = "Animals: " ++ show sh ++ " sheep "
+                               ++ show pi ++ " pigs "
+                               ++ show co ++ " cows "
+                               ++ show ho  ++ " horses."
 
 data Supply = Supply { _borders :: Int
                      , _wood    :: Int
                      , _stones  :: Int
                      , _reeds   :: Int
                      , _animalsupply :: Animals
-                     } deriving (Show)
+                     } 
 makeLenses ''Supply
+
+instance Show Supply where
+  show (Supply bo wo st re animals) = "Supply: "
+                                                    ++ show bo ++ " borders "
+                                                    ++ show wo ++ " wood "
+                                                    ++ show st ++ " stones "
+                                                    ++ show re ++ " reeds. "
+                                                    ++ "\n" ++ show animals
 
 emptySupply :: Supply
 emptySupply = Supply 0 0 0 0 emptyAnimals
@@ -74,6 +89,42 @@ data Farm = Farm { _tiles :: [[Tile]]
                  }
 makeLenses ''Farm
 
+type Measurements = (Integer, Integer)
+
+
+
+farmMapHoriz :: [Border] -> [Maybe (Either Tile Border)]
+farmMapHoriz hs = [Nothing] ++ intersperse Nothing (map (Just . Right ) hs) ++ [Nothing]
+
+type FarmMap = [[Maybe (Either Tile Border)]]
+farmMap :: Farm -> FarmMap
+farmMap (Farm (ts:tss) (vs:vss) (hs:hss)) =
+  [farmMapHoriz hs] ++ [farmMapTileLine ts vs] ++ farmMap (Farm tss vss hss)
+farmMap (Farm [] [] [hs] ) = [farmMapHoriz hs]
+farmMap _ = error "too many tiles or borders in farmMap"
+
+
+farmMapTileLine :: [Tile] -> [Border] -> [Maybe (Either Tile Border)]
+farmMapTileLine (t:ts) (b:bs) = map Just  [Right b, Left t] ++ farmMapTileLine ts bs
+farmMapTileLine [] [b] = [Just (Right b)]
+farmMapTileLine _ _ = error "too many tiles or borders in farmMapTileLine"
+
+tileHeight = 1
+
+-- getClickedItemInLine :: Integer -> [Maybe (Either Tile Border)] -> (Integer ,Either Tile Border)
+-- getClickedItemInLine = getClickedItemInLine' 0
+--   where getClickedItemInLine' n x (it:its)
+--           | nextCoord < 0 = (n, it)
+--           | otherwise = getClickedItemInLine' (n + 1) nextCoord its
+--           where nextCoord = x - size it
+--                 size Nothing = 0
+--                 size (Just (Right b)) = fst (volume b)
+--                 size (Just (Right b)) = fst (volume b)
+
+-- getClickedItemLine :: Coord -> FarmMap -> (Integer, [Maybe (Either Tile Border)])
+-- getClickedItemLine = getClickedItemLine' 0
+--   where getClickedItemLine' n (x,1) (fm:fms) = (n, fm)
+--         getClickedItemLine' n (x,y) (fm:fms) = getClickedItemLine' (n + 1) (x, y-tileHeight) fms
 
 class  Show a => Volume a where
   volume :: Show a => a  -> (Integer,Integer)
@@ -84,7 +135,7 @@ emptyFarm :: Farm
 emptyFarm = Farm (replicate 3 $ replicate 2 emptyTile) (replicate 3 $ replicate 3 $ Border V False) (replicate 4 $ replicate 2 $ Border H False)
 
 showHorizBorder :: [Border] -> String
-showHorizBorder hs = " " ++ unwords (map show hs) ++ " "
+showHorizBorder hs = "+" ++ intercalate "+" (map show hs) ++ "+"
 
 showFarmLine :: [Tile] -> [Border] -> String
 showFarmLine (t:ts) (b:bs) = show b ++ show t ++ showFarmLine ts bs
@@ -93,9 +144,11 @@ showFarmLine [] [b] = show b
 showFarmLine [] [] = error "too few borders"
 
 showFarm :: Farm -> String
-showFarm (Farm (ts:tss) (vs:vss) (hs:hss)) = showHorizBorder hs ++ "\n" ++ showFarmLine ts vs ++ "\n" ++ showFarm (Farm tss vss hss)
-showFarm (Farm [] [] [hs]) = showHorizBorder hs
+showFarm (Farm (ts:tss) (vs:vss) (hs:hss) ) = showHorizBorder hs ++ "\n" ++ showFarmLine ts vs ++ "\n" ++ showFarm (Farm tss vss hss )
+showFarm (Farm [] [] [hs] ) = showHorizBorder hs
 showFarm _ = error "too many lines in farm"
+
+
 
 instance Show Farm where
   show = showFarm
@@ -151,7 +204,7 @@ fillWith = replicate tileStrLength
 instance Show Border where
   show (Border V False) = "|"
   show (Border V True) = "+"
-  show (Border H False) = fillWith '.'
+  show (Border H False) = fillWith '-'
   show (Border H True) = fillWith '+'
 
 
@@ -251,11 +304,10 @@ hasBorders :: Agricola -> Color -> Bool
 hasBorders agri color = agri ^. (player color . supply . borders) >= 1
 
 freeSpace :: Agricola -> Color -> Alignment -> Int -> Int -> Bool
-freeSpace agri color al n m = agri ^. (player color . farm . border al n m . isThere )
+freeSpace agri color al n m = not $ agri ^. (player color . farm . border al n m . isThere )
 
-tryPlaceBorder :: Maybe Agricola -> Alignment -> Int -> Int -> Color -> Maybe Agricola
-tryPlaceBorder Nothing _ _ _ _ = Nothing
-tryPlaceBorder (Just agri) al n m color =
+tryPlaceBorder :: Agricola -> Alignment -> Int -> Int -> Color -> Maybe Agricola
+tryPlaceBorder agri al n m color =
   if canPlaceBorder agri al n m color then
     Just (placeBorder agri al n m color)
   else
@@ -287,40 +339,120 @@ tryTakeAction agri DoNothing = Nothing
 
 
 -- Checks wheteher the given coo
-inBox :: (Integer, Integer) -> (Integer, Integer) -> (Integer, Integer) -> Bool
+inBox :: Coord -> Coord -> Measurements -> Bool
 inBox (x,y) (bx,by) (xv,yv) = bx <= x && x < bx + xv && by <= y && y < by + yv
 
 gameLoop :: Agricola -> Curses Event
 gameLoop agri = gameLoopWCoords agri 0 0
 
+
+farmOffset :: Color -> Coord
+farmOffset Red = (2,4)
+farmOffset Blue = (60,4)
+
+farmVolume :: Agricola -> Color -> Measurements
+farmVolume agri col = volume (agri ^. (player col . farm))
+
+
+
+showFarmMapLine :: [Maybe (Either Tile Border)] -> String
+showFarmMapLine (Nothing:xs) = " " ++ showFarmMapLine xs
+showFarmMapLine (Just (Right (Border H True)):xs) = "+" ++ showFarmMapLine xs
+showFarmMapLine (Just (Right (Border H False)):xs) = "-" ++ showFarmMapLine xs
+showFarmMapLine (Just (Right (Border V True)):xs) = "+" ++ showFarmMapLine xs
+showFarmMapLine (Just (Right (Border V False)):xs) = "|" ++ showFarmMapLine xs
+showFarmMapLine (Just (Left _):xs) = "T" ++ showFarmMapLine xs
+showFarmMapLine [] = ""
+
+showFarmMap :: FarmMap -> String
+showFarmMap farmMap = concat [r ++ "\n" | r <- map showFarmMapLine farmMap]
+
+subSeqSum :: [Integer] -> [Integer]
+subSeqSum = subSeqSum' [] 0
+  where subSeqSum' ys s [] = reverse ys
+        subSeqSum' ys s (x:xs) = subSeqSum' ((x + s):ys) (x+s) xs
+
+
+farmMapLineLengths :: [Maybe (Either Tile Border)] -> [Integer]
+farmMapLineLengths (Nothing:xs) = 1 : farmMapLineLengths xs
+farmMapLineLengths (Just (Right b):xs) =
+  fst (volume b): farmMapLineLengths xs
+farmMapLineLengths (Just (Left t):xs)  =
+  fst (volume t): farmMapLineLengths xs
+farmMapLineLengths [] = []
+
+farmMapLengths = map farmMapLineLengths
+
+
+farmWasClicked :: Agricola -> Coord -> Maybe Color
+farmWasClicked agri  coord
+  | inBox coord (farmOffset Blue) (farmVolume agri Blue) = Just Blue
+  | inBox coord (farmOffset Red) (farmVolume agri Red) = Just Red
+  | otherwise = Nothing
+
+getClicked :: Agricola -> Coord -> Maybe (Color, Either Tile Border, Coord)
+getClicked agri coords = case farmWasClicked agri coords of
+  Nothing -> Nothing
+  Just color -> clicked
+    where offsetcoords@(ox,oy) = coords .-. farmOffset color
+          farmMp = farmMap (agri ^. (player color . farm))
+          fmLs = farmMapLengths farmMp
+          beforeInLineLengths = takeWhile (<= ox) $
+                                subSeqSum (fmLs !! fromIntegral oy)
+          ix = length beforeInLineLengths
+          beforeInLine = take ix (farmMp !! fromIntegral oy)
+          item = (farmMp !! fromIntegral oy) !! ix
+          clicked =  case item of
+                          Nothing -> Nothing
+                          Just itm -> Just (color
+                                           , itm
+                                           , (fromIntegral nx
+                                             , fromIntegral oy `div` 2  ))
+                            where nx = case itm of
+                                    (Left _) ->
+                                      length $ lefts $ catMaybes beforeInLine
+                                    (Right _) ->
+                                      length $ rights $ catMaybes beforeInLine
+
+
+
+
+-- clear :: Update()
+-- clear = do
+--   moveCursor 0 0
+--   drawLines 0 0 $ replicate 100 $ replicate 200 ' '
+--   return ()
+
 gameLoopWCoords :: Agricola -> Integer -> Integer -> Curses Event
 gameLoopWCoords agri mx my = do
-  setEcho False
+  setEcho True
   w <- defaultWindow
   colRed <- newColorID NC.ColorRed NC.ColorBlack 1
   colBlue <- newColorID NC.ColorBlue NC.ColorBlack 2
   colWhite <- newColorID NC.ColorWhite NC.ColorBlack 3
-  let redFarmStart = (2,4)
-  let blueFarmStart = (2,51)
+  let redStartColumn = 2
+  let blueStartColumn = 60
   updateWindow w $ do
+     NC.clear
      moveCursor 1 2
      drawString "Hello qt3.14!"
      moveCursor 2 2
      drawString "(press q to quit)"
 
      setColor colRed
-     moveCursor 3 2
-     drawString $ show $ agri ^. (red . supply)
-     end <- drawLines (snd redFarmStart) (fst redFarmStart) $ lines $ showFarm (agri ^. (red . farm))
-     moveCursor (end + 1) 2
-     drawString $ show $ agri ^. (red . color)
+     end <- drawLines (snd $ farmOffset Red) (fst $ farmOffset Red) $ lines $ showFarm (agri ^. (player Red . farm))
+     moveCursor (end + 1) $ fst $ farmOffset Red
+     end <- drawLines (end + 2) 2 $ lines $ show $ agri ^. (player Red . supply)
+     moveCursor (end + 1) $ fst $ farmOffset Red
+     drawString $ show $ agri ^. (player Red . color)
 
      setColor colBlue
-     moveCursor 49 2
-     drawString $ show $ agri ^. (blue . supply)
-     end <- drawLines (snd blueFarmStart) (fst blueFarmStart) $ lines $ showFarm (agri ^. (blue . farm))
-     moveCursor (end + 1) 2
-     drawString $ show $ agri ^. (blue . color)
+     end <- drawLines (snd $ farmOffset Blue) (fst $ farmOffset Blue) $ lines $ showFarm (agri ^. (player Blue . farm))
+     moveCursor (end + 1) $ fst $ farmOffset Blue
+     end <- drawLines (end + 2) (fst $ farmOffset Blue) $ lines $ show $ agri ^. (player Blue . supply)
+     moveCursor (end + 1) $ fst $ farmOffset Blue
+     drawString $ show $ agri ^. (player Blue . color)
+
      setColor colWhite
      moveCursor my mx
   render
@@ -330,23 +462,35 @@ gameLoopWCoords agri mx my = do
     EventCharacter 'Q' -> return ev
     EventMouse _ mouseState -> do
      let (mx,my,mz) = mouseCoordinates mouseState
-     let redFarmVol = volume (agri ^. (player Red . farm))
-     let blueFarmVol = volume (agri ^. (player Blue . farm))
-     let inBlueFarm = inBox (mx,my) blueFarmStart blueFarmVol
-     let inRedFarm = inBox (mx,my) redFarmStart redFarmVol
      updateWindow w (do
                         moveCursor 0 0
-                        drawString "Action failed"
-                        setColor colBlue
-                        drawString $ show inBlueFarm
-                        setColor colRed
-                        drawString $ show inRedFarm
+                        drawString $ replicate 80 ' '
+                        moveCursor 0 0
+                        case getClicked agri (mx,my) of
+                          Nothing -> return ()
+                          Just (col, item, (cx,cy)) -> do
+                            drawString $ show item
+                            return ()
                         setColor colWhite
                         drawString $ show (mx, my)
-                        return ())
+                    )
      render
-     gameLoopWCoords agri mx my
-    _ -> gameLoop agri
+     case getClicked agri (mx,my) of
+       Nothing -> gameLoopWCoords agri mx my
+       Just (col, item, (cx,cy)) -> 
+         case item of
+           (Left _) -> gameLoopWCoords agri mx my
+           (Right (Border a _)) ->
+             case tryPlaceBorder agri a (fromIntegral cy ) (fromIntegral cx ) col of
+               Nothing -> gameLoopWCoords agri mx my
+               Just newagri -> gameLoopWCoords newagri mx my
+
+(.-.) :: Coord -> Coord -> Coord
+(x1,y1) .-. (x2,y2) = (x1 - x2, y1 - y2)
+
+(.+.) :: Coord -> Coord -> Coord
+(x1,y1) .+. (x2,y2) = (x1 + x2, y1 + y2)
+
 
 main :: IO ()
 main = do
