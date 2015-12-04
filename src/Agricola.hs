@@ -20,8 +20,8 @@ data AgricolaColor = Red | Blue
 
 data Building = Stall | Stable | FarmHouse |
                 HalfTimberedHouse | Storage | Shelter |
-                OpenStable deriving (Show)
-data Animal = Sheep | Pig | Cow | Horse deriving (Show, Eq)
+                OpenStable
+data Animal = Sheep | Pig | Cow | Horse deriving ( Eq)
 data Good = Wood | Stone | Reed deriving (Show)
 
 
@@ -32,120 +32,100 @@ data Tile = Tile { _building :: Maybe Building
 
 makeLenses ''Tile
 
+instance Show Building where
+  show Stall = "Stl"
+  show Stable = "Stb"
+  show FarmHouse = "FaH"
+  show HalfTimberedHouse = "HTH"
+  show Storage = "Sto"
+  show Shelter = "She"
+  show OpenStable = "OSt"
+
+instance Show Animal where
+  show Sheep = "S"
+  show Pig  = "P"
+  show Cow  = "C"
+  show Horse = "H"
+
+
+showTro :: Bool -> String
+showTro False = " "
+showTro True = "T"
+
+showAn :: Maybe (Animal, Int) -> String
+showAn Nothing = "0 A"
+showAn (Just (an, count)) = show count ++ " " ++ show an
+
+showBu :: Maybe Building -> String
+showBu Nothing = replicate (length $ show Stall) ' '
+showBu (Just bu) = show bu
+
 instance Show Tile where
-  show t = "T"
-
-
-data Border = ABorder | NoBorder
-
-
-
--- data Row = Row { _tile :: [Tile], _borders :: [Border]}
--- makeLenses ''Row
-
--- instance Show Row where
---   show (Row (t:ts) (b:bs)) = show b ++ show t ++ show (Row ts bs)
---   show (Row [] [b]) = show b
---   show _ = error "too many borders"
-
-instance Show Border where
-  show ABorder = "+"
-  show NoBorder = "."
-
-
--- data Board = Board { _rows :: [Row], _vborders :: [[Border]]} deriving (Show)
--- makeLenses ''Board
-
+  show (Tile bu an tro) = unwords [showBu bu ,showAn an , showTro tro]
 
 emptyTile :: Tile
 emptyTile = Tile Nothing Nothing False
 
 
 
-showBoard :: Board -> String
-showBoard (Board  []) = ""
-showBoard (Board (row:rows)) = concatMap (either show show) row ++ "\n" ++ showBoard (Board rows)
-
-type BoardLoc = Either Tile Border
-data Board = Board {_rows :: [[BoardLoc]]} deriving (Show)
-
-makeLenses ''Board
+tileStrLength :: Int
+tileStrLength = length $ show emptyTile
 
 
-showRow :: [BoardLoc] -> String
-showRow = concatMap (either show show) 
+fillWith :: Char -> String
+fillWith = replicate tileStrLength
+
+fillerStr :: String
+fillerStr = fillWith ' '
 
 
-tilesAndBorders :: Board -> ([[Tile]], [[Border]])
-tilesAndBorders b = (_tiles b, _borders b)
+data Alignment = Horizontal | Vertical
+data Border = Border Alignment Bool
 
-boardFromPair :: ([[Tile]], [[Border]]) -> Board
-boardFromPair (ts:tss, bs:bss) = Board $ [ map Right bs, map Left ts] ++ restRows
-  where (Board restRows) = boardFromPair (tss,bss)
-boardFromPair ([],[]) = error "too many tiles"
-boardFromPair ([], [lastborder]) = Board [map Right lastborder]
-
-
-
-_borders :: Board -> [[Border]]
-_borders = filter (not . null)  . map rights  .  _rows
-
-_tiles :: Board -> [[Tile]]
-_tiles = filter (not . null)  . map lefts  .  _rows
-
-_setBorders :: Board -> [[Border]] -> Board
-_setBorders board newborders = boardFromPair (tiles,newborders)
-  where (tiles,borders) = tilesAndBorders board
-
-_setTiles ::  Board -> [[Tile]] -> Board
-_setTiles board newtiles = boardFromPair (newtiles,borders)
-  where (tiles,borders) = tilesAndBorders board
-
-
-
-updateTile :: Int -> Int -> (Tile -> Tile) -> [[Tile]] -> [[Tile]]
-updateTile n m = over (element n . element m)
-
-updateBuilding :: Maybe Building -> Tile -> Tile
-updateBuilding build (Tile _ t1 t2)  = Tile build t1 t2
-
-setToFarmHouse = updateTile 0 1 $  updateBuilding $  Just FarmHouse
+instance Show Border where
+  show (Border Vertical False) = "|"
+  show (Border Vertical True) = "+"
+  show (Border Horizontal False) = fillWith '.'
+  show (Border Horizontal True) = fillWith '+'
 
 
 
 
-tiles :: Lens' Board [[Tile]]
-tiles = lens _tiles _setTiles
+data Farm = Farm { _tiles :: [[Tile]]
+                 , _vborders :: [[Border]]
+                 , _hborders :: [[Border]]
+                 } deriving (Show)
 
-borders :: Lens' Board [[Border]]
-borders = lens _borders _setBorders
-
-emptyRow :: [BoardLoc]
-emptyRow = [ Right NoBorder
-           , Left emptyTile
-           , Right NoBorder
-           , Left emptyTile
-           , Right NoBorder
-           , Left emptyTile
-           , Right NoBorder
-            ]
-
-emptyVertBorder :: [BoardLoc]
-emptyVertBorder = replicate 3 $ Right NoBorder
-
-emptyBoard :: Board
-emptyBoard = Board [ emptyVertBorder
-                   , emptyRow
-                   , emptyVertBorder
-                   , emptyRow
-                   , emptyVertBorder
-                   ]
+makeLenses ''Farm
 
 
+showHorizBorder :: [Border] -> String
+showHorizBorder hs = " " ++ unwords (map show hs) ++ " "
 
--- Sama og over tiles setToFarmHouse emptyBoard
-startingBoard :: Board
-startingBoard = emptyBoard & tiles %~ setToFarmHouse
+showFarmLine :: [Tile] -> [Border] -> String
+showFarmLine (t:ts) (b:bs) = show b ++ show t ++ showFarmLine ts bs
+
+showFarmLine [] [b] = show b
+showFarmLine [] [] = error "too few borders"
+
+showFarm :: Farm -> String
+showFarm (Farm (ts:tss) (vs:vss) (hs:hss)) = showHorizBorder hs ++ "\n" ++ showFarmLine ts vs ++ "\n" ++ showFarm (Farm tss vss hss)
+showFarm (Farm [] [] [hs]) = showHorizBorder hs
+showFarm _ = error "too many lines in farm"
+
+
+emptyFarm :: Farm
+emptyFarm = Farm (replicate 3 $ replicate 2 emptyTile) (replicate 3 $ replicate 3 $ Border Vertical False) (replicate 4 $ replicate 2 $ Border Horizontal False)
+
+
+printFarm :: Farm -> IO()
+printFarm farm = mapM_ putStrLn $ lines $ showFarm farm
+
+homeTile :: Tile
+homeTile = Tile (Just FarmHouse) Nothing False
+
+startingFarm :: Farm
+startingFarm = emptyFarm & (tiles . element 2 . element 0) .~ homeTile
 
 -- data Animals = Animals { sheep   :: Int
 --                        , pigs    :: Int
@@ -162,7 +142,7 @@ startingBoard = emptyBoard & tiles %~ setToFarmHouse
 
 
 
-data Piece = Worker Color | Border | Animal | Good | Trough
+--data Piece = Worker Color | Bo | Animal | Good | Trough
 
 drawLines :: Integer -> Integer -> [String] -> Update Integer
 drawLines n _ [] = return n
@@ -174,7 +154,6 @@ drawLines n m (l:ls) = do
 
 
 
-
 main :: IO ()
 main = runCurses $ do
     setEcho False
@@ -182,7 +161,7 @@ main = runCurses $ do
     updateWindow w $ do
         moveCursor 1 10
         drawString "Hello qt3.14!"
-        end <- drawLines 3 10 $ lines $ showBoard emptyBoard
+        end <- drawLines 3 10 $ lines $ showFarm emptyFarm
         moveCursor (end + 1) 10
         drawString "(press q to quit)"
         moveCursor 0 0
