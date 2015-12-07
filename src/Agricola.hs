@@ -3,18 +3,12 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE FlexibleContexts #-}
-module Main where
+module Agricola where
 
 import Control.Lens
-import Control.Monad
-import Control.Monad.State.Lazy
 import Data.Either
 import Data.List
-import Data.Char
-import Data.Maybe
 import Test.QuickCheck
-import UI.NCurses hiding (Color)
-import qualified UI.NCurses as NC
 
 
 
@@ -65,7 +59,7 @@ data Animal = Sheep | Pig | Cow | Horse deriving ( Eq)
 
 data Good = Wood | Stone | Reed deriving (Show)
 
-data Alignment = H | V
+data Alignment = H | V deriving (Eq, Show)
 data Border = Border {  _alignment ::  Alignment
                       , _isThere   :: Bool
                       }
@@ -229,25 +223,8 @@ tileStrLength :: Int
 tileStrLength = length $ show emptyTile
 
 
-
-
 printFarm :: Farm -> IO()
 printFarm farm = mapM_ putStrLn $ lines $ showFarm farm
-
-
-
-
-
-
-
---data Piece = Worker Color | Bo | Animal | Good | Trough
-
-drawLines :: Integer -> Integer -> [String] -> Update Integer
-drawLines n _ [] = return n
-drawLines n m (l:ls) = do
-    moveCursor n m
-    drawString l
-    drawLines (n+1) m ls
 
 
 -- Getters and setters for a border
@@ -282,40 +259,9 @@ tile n m = lens (_tile n m) (_setTile n m)
 startingFarm :: Farm
 startingFarm = emptyFarm & tile 2 0 . building .~ Just FarmHouse
 
--- We can also chain updates using &~ and .=
--- startingFarm = emptyFarm &~ do
---   tile 2 0 . building .= Just FarmHouse
-
-
-
 player :: Color -> Lens' Agricola Player
 player Red = red
 player Blue = blue
-
-placeBorder :: Agricola -> Alignment -> Int -> Int -> Color -> Agricola
-placeBorder agri al n m color = agri &~ do
-  (player color . supply . borders) -= 1
-  (player color . farm . border al n m) .= Border al True
-
-canPlaceBorder :: Agricola -> Alignment -> Int -> Int -> Color -> Bool
-canPlaceBorder agri al n m  color = hasBorders agri color
-                                    && freeSpace agri color al n m
-
-hasBorders :: Agricola -> Color -> Bool
-hasBorders agri color = agri ^. (player color . supply . borders) >= 1
-
-freeSpace :: Agricola -> Color -> Alignment -> Int -> Int -> Bool
-freeSpace agri color al n m = not $
-                              agri ^.
-                              (player color . farm . border al n m . isThere )
-
-tryPlaceBorder :: Agricola -> Alignment -> Int -> Int -> Color -> Maybe Agricola
-tryPlaceBorder agri al n m color =
-  if canPlaceBorder agri al n m color then
-    Just (placeBorder agri al n m color)
-  else
-    Nothing
-
 
 
 initPlayer :: Player -> Player
@@ -330,23 +276,6 @@ startingState = emptyAgricola &~ do
   player Red  %=  initPlayer
 
 
-
-
-data Action = DoNothing | PlaceBorder Int Int | TakeResources deriving (Eq, Show)
-
-tryTakeAction :: Agricola -> Action -> Maybe Agricola
-tryTakeAction agri (PlaceBorder n m) = undefined
-tryTakeAction agri TakeResources = undefined
-tryTakeAction agri DoNothing = Nothing
-
-
-
--- Checks wheteher the given coo
-inBox :: Coord -> Coord -> Measurements -> Bool
-inBox (x,y) (bx,by) (xv,yv) = bx <= x && x < bx + xv && by <= y && y < by + yv
-
-gameLoop :: Agricola -> Curses Event
-gameLoop agri = gameLoopWCoords agri 0 0
 
 
 farmOffset :: Color -> Coord
@@ -388,116 +317,3 @@ farmMapLineLengths (Just (Left t):xs)  =
 farmMapLineLengths [] = []
 
 farmMapLengths = map farmMapLineLengths
-
-
-farmWasClicked :: Agricola -> Coord -> Maybe Color
-farmWasClicked agri  coord
-  | inBox coord (farmOffset Blue) (farmVolume agri Blue) = Just Blue
-  | inBox coord (farmOffset Red) (farmVolume agri Red) = Just Red
-  | otherwise = Nothing
-
-getClicked :: Agricola -> Coord -> Maybe (Color, Either Tile Border, Coord)
-getClicked agri coords = case farmWasClicked agri coords of
-  Nothing -> Nothing
-  Just color -> clicked
-    where offsetcoords@(ox,oy) = coords .-. farmOffset color
-          farmMp = farmMap (agri ^. (player color . farm))
-          fmLs = farmMapLengths farmMp
-          beforeInLineLengths = takeWhile (<= ox) $
-                                subSeqSum (fmLs !! fromIntegral oy)
-          ix = length beforeInLineLengths
-          beforeInLine = take ix (farmMp !! fromIntegral oy)
-          item = (farmMp !! fromIntegral oy) !! ix
-          clicked =  case item of
-                          Nothing -> Nothing
-                          Just itm -> Just (color
-                                           , itm
-                                           , (fromIntegral nx
-                                             , fromIntegral oy `div` 2  ))
-                            where nx = case itm of
-                                    (Left _) ->
-                                      length $ lefts $ catMaybes beforeInLine
-                                    (Right _) ->
-                                      length $ rights $ catMaybes beforeInLine
-
-
-
-drawFarm :: Agricola -> Color -> Update Integer
-drawFarm agri col = drawLines (snd $ farmOffset col) (fst $ farmOffset col) $
-                    lines $ showFarm (agri ^. (player col . farm))
-
-
-drawSupply :: Agricola -> Color -> Integer -> Update Integer
-drawSupply agri color start =
-  drawLines (start + 2) (fst $ farmOffset color) $
-  lines $ show $ agri ^. (player color . supply)
-
-gameLoopWCoords :: Agricola -> Integer -> Integer -> Curses Event
-gameLoopWCoords agri mx my = do
-  setEcho True
-  w <- defaultWindow
-  colRed <- newColorID NC.ColorRed NC.ColorBlack 1
-  colBlue <- newColorID NC.ColorBlue NC.ColorBlack 2
-  colWhite <- newColorID NC.ColorWhite NC.ColorBlack 3
-  let redStartColumn = 2
-  let blueStartColumn = 60
-  updateWindow w $ do
-     NC.clear
-     moveCursor 1 2
-     drawString "Hello qt3.14!"
-     moveCursor 2 2
-     drawString "(press q to quit)"
-
-     setColor colRed
-     end <- drawFarm agri Red
-     end <- drawSupply agri Red end
-     moveCursor (end + 1) $ fst $ farmOffset Red
-     drawString $ show $ agri ^. (player Red . color)
-
-     setColor colBlue
-     end <- drawFarm agri Blue
-     end <- drawSupply agri Blue end
-     moveCursor (end + 1) $ fst $ farmOffset Blue
-     drawString $ show $ agri ^. (player Blue . color)
-
-     setColor colWhite
-     moveCursor my mx
-  render
-  ev <- waitFor w
-  case ev of
-    EventCharacter 'q' -> return ev
-    EventCharacter 'Q' -> return ev
-    EventMouse _ mouseState -> do
-     let (mx,my,mz) = mouseCoordinates mouseState
-     case getClicked agri (mx,my) of
-       Nothing -> gameLoopWCoords agri mx my
-       Just (col, item, (cx,cy)) -> 
-         case item of
-           (Left _) -> gameLoopWCoords agri mx my
-           (Right (Border a _)) ->
-             case tryPlaceBorder agri a (fromIntegral cy ) (fromIntegral cx ) col of
-               Nothing -> gameLoopWCoords agri mx my
-               Just newagri -> gameLoopWCoords newagri mx my
-
-(.-.) :: Coord -> Coord -> Coord
-(x1,y1) .-. (x2,y2) = (x1 - x2, y1 - y2)
-
-(.+.) :: Coord -> Coord -> Coord
-(x1,y1) .+. (x2,y2) = (x1 + x2, y1 + y2)
-
-
-main :: IO ()
-main = do
-  ev <- runCurses $ gameLoop startingState
-  print ev
-  return ()
-
-waitFor :: Window -> Curses Event
-waitFor w = loop where
-    loop = do
-        ev <- getEvent w Nothing
-        case ev of
-            Nothing -> loop
-            Just ev -> return ev
-
-
