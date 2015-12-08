@@ -33,18 +33,30 @@ otherColor Blue = Red
 
 
 tryPlaceBorder :: Agricola -> Alignment -> Int -> Int -> Color -> Maybe Agricola
-tryPlaceBorder agri al n m color = do
-  
-  if canPlaceBorder agri al n m color then do
-    let newAgri = placeBorder agri al n m color
-    return (newAgri & whoseTurn %~ otherColor)
+tryPlaceBorder agri al n m color =
+  if canPlaceBorder agri al n m color then
+    do let newAgri = placeBorder agri al n m color
+       return (newAgri & whoseTurn %~ otherColor)
   else Nothing
 
+
+addAnimalSupply :: Animals -> Animals -> Animals
+addAnimalSupply (Animals as ap ac ah) (Animals bs bp bc bh) =
+  Animals (as + bs) (ap+bp) (ac+bc) (ah+bh)
+
+
+addSupply :: Supply -> Supply -> Supply
+addSupply (Supply ab aw as ar aa) (Supply bb bw bs br ba) =
+  Supply (ab+bb) (aw+bw) (as+bs) (ar+br) (aa `addAnimalSupply` ba)
+
+takeResources :: Agricola -> Supply -> Agricola
+takeResources agri sup = agri & player col . supply %~ addSupply sup
+  where col = agri ^. whoseTurn
 
 tryTakeAction :: Agricola -> Action -> Maybe Agricola
 tryTakeAction agri (PlaceBorder alignment cx cy) =
   tryPlaceBorder agri alignment  cy  cx (agri ^. whoseTurn)
-tryTakeAction agri TakeResources = undefined
+tryTakeAction agri (TakeResources sup) = Just (takeResources agri sup)
 tryTakeAction agri DoNothing = Just agri
 
 

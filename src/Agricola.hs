@@ -20,7 +20,7 @@ data Animals = Animals { _sheep   :: Int
                        , _pigs    :: Int
                        , _cows    :: Int
                        , _horses  :: Int
-                       }
+                       } deriving Eq
 makeLenses ''Animals
 
 emptyAnimals :: Animals
@@ -37,7 +37,7 @@ data Supply = Supply { _borders :: Int
                      , _stones  :: Int
                      , _reeds   :: Int
                      , _animalsupply :: Animals
-                     } 
+                     } deriving (Eq)
 makeLenses ''Supply
 
 instance Show Supply where

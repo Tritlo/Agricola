@@ -9,7 +9,8 @@ import Control.Lens
 
 data Action = DoNothing |
               PlaceBorder Alignment Int Int |
-              TakeResources deriving (Eq, Show)
+              TakeResources Supply
+            deriving (Eq, Show)
 
 clickedFarm :: Agricola -> Coord -> Maybe Color
 clickedFarm agri  coord
