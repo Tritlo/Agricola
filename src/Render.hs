@@ -28,6 +28,9 @@ drawSupply agri color start =
 drawBoard :: Agricola -> Integer -> Integer ->  Update Integer
 drawBoard agri x y= drawLines x y $ lines $ show $ agri ^. board
 
+instructions :: String
+instructions = "Press (b) to place border." ++ "\n"
+               ++ "Press (r) to take resources." ++ "\n"
 drawState :: Agricola -> ColorID -> ColorID -> ColorID -> Update ()
 drawState agri colRed colBlue colBoard = do
      clear
@@ -52,18 +55,19 @@ drawState agri colRed colBlue colBoard = do
      drawString $ " has " ++ (show $ agri ^. (player Blue . workers)) ++ " workers."
 
      setColor colBoard
-     drawBoard agri 20 2
+     end <- drawBoard agri 20 2
+     drawLines (end + 5) 2 $ lines instructions
      return ()
-
 
 settings :: Curses (Window, ColorID, ColorID, ColorID)
 settings = do
-  setEcho True
+  setEcho False
   w <- defaultWindow
   colRed <- newColorID  ColorRed ColorBlack 1
   colBlue <- newColorID ColorBlue ColorBlack 2
   colWhite <- newColorID ColorWhite ColorBlack 3
   return (w,colRed,colBlue,colWhite)
+
 
 renderGame :: Agricola -> Curses ()
 renderGame agri = do

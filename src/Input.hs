@@ -1,10 +1,12 @@
 module Input where
 
 import Agricola
-import UI.NCurses (Event(..), mouseCoordinates, Curses)
+import UI.NCurses hiding (Color)
+
 import Data.Maybe
 import Data.Either
 import Control.Lens
+import Render
 
 
 
@@ -52,11 +54,33 @@ getAction agri (EventCharacter 'Q')  = return Nothing
 -- getAction agri (EventCharacter 'p')  =  Nothing
 -- getAction agri (EventCharacter 'c')  =  Nothing
 -- getAction agri (EventCharacter 'h')  =  Nothing
+getAction agri (EventCharacter 'r')  = return $ Just (TakeResources (Supply 0 1 1 1 emptyAnimals))
+getAction agri (EventCharacter 'b') = do
+  (w, _,_,_) <- settings
+  (mx,my) <- getCursor w
+  updateWindow w $ do
+    moveCursor 0 0
+    drawString "Choose border to place"
+    moveCursor my mx
+  render
+  return Nothing
+  ev <- waitFor w
+  case ev of
+    m@(EventMouse _ mouseState) -> return $ getClickAction agri (mx,my)
+      where (mx,my,mz) = mouseCoordinates mouseState
+    EventCharacter 'q' -> return Nothing
+    EventCharacter 'Q' -> return Nothing
+    _ -> getAction agri (EventCharacter 'b')
 getAction agri (EventCharacter char) = undefined
 getAction agri (EventSpecialKey key) = undefined
-
-getAction agri (EventMouse int mouseState) = return $ getClickAction agri (mx,my)
-  where (mx,my,mz) = mouseCoordinates mouseState
-
+getAction agri (EventMouse int mouseState) = return $ Just DoNothing
 getAction agri EventResized = return $ Just DoNothing
 getAction agri (EventUnknown ev) = return $ Just DoNothing
+
+waitFor :: Window -> Curses Event
+waitFor w = loop where
+    loop = do
+        ev <- getEvent w Nothing
+        case ev of
+            Nothing -> loop
+            Just ev -> return ev

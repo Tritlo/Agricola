@@ -10,13 +10,6 @@ import UI.NCurses hiding (Color)
 
 
 
-waitFor :: Window -> Curses Event
-waitFor w = loop where
-    loop = do
-        ev <- getEvent w Nothing
-        case ev of
-            Nothing -> loop
-            Just ev -> return ev
 
 gameLoop :: Agricola -> Curses Agricola
 gameLoop agri = do
