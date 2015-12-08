@@ -7,10 +7,6 @@ import Data.Either
 import Control.Lens
 
 
-data Action = DoNothing |
-              PlaceBorder Alignment Int Int |
-              TakeResources Supply
-            deriving (Eq, Show)
 
 clickedFarm :: Agricola -> Coord -> Maybe Color
 clickedFarm agri  coord
@@ -47,6 +43,15 @@ getClickAction agri (mx,my) = case getClicked agri (mx,my) of
 getAction :: Agricola -> Event -> Maybe Action
 getAction agri (EventCharacter 'q')  =  Nothing
 getAction agri (EventCharacter 'Q')  =  Nothing
+-- getAction agri (EventCharacter 'f')  =  Nothing
+-- getAction agri (EventCharacter 'F')  =  Nothing
+-- getAction agri (EventCharacter 's')  =  Nothing
+-- getAction agri (EventCharacter 'S')  =  Nothing
+-- getAction agri (EventCharacter 'e')  =  Nothing
+-- getAction agri (EventCharacter 'm')  =  Nothing
+-- getAction agri (EventCharacter 'p')  =  Nothing
+-- getAction agri (EventCharacter 'c')  =  Nothing
+-- getAction agri (EventCharacter 'h')  =  Nothing
 getAction agri (EventCharacter char) = undefined
 getAction agri (EventSpecialKey key) = undefined
 

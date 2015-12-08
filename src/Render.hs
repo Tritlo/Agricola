@@ -25,8 +25,11 @@ drawSupply agri color start =
   lines $ show $ agri ^. (player color . supply)
 
 
-drawState :: Agricola -> ColorID -> ColorID -> Update ()
-drawState agri colRed colBlue = do
+drawBoard :: Agricola -> Integer -> Integer ->  Update Integer
+drawBoard agri x y= drawLines x y $ lines $ show $ agri ^. board
+
+drawState :: Agricola -> ColorID -> ColorID -> ColorID -> Update ()
+drawState agri colRed colBlue colBoard = do
      clear
      moveCursor 1 2
      drawString "Hello qt3.14!"
@@ -39,12 +42,18 @@ drawState agri colRed colBlue = do
      end <- drawSupply agri Red end
      moveCursor (end + 1) $ fst $ farmOffset Red
      drawString $ show $ agri ^. (player Red . color)
+     drawString $ " has " ++ (show $ agri ^. (player Red . workers)) ++ " workers."
 
      setColor colBlue
      end <- drawFarm agri Blue
      end <- drawSupply agri Blue end
      moveCursor (end + 1) $ fst $ farmOffset Blue
      drawString $ show $ agri ^. (player Blue . color)
+     drawString $ " has " ++ (show $ agri ^. (player Blue . workers)) ++ " workers."
+
+     setColor colBoard
+     drawBoard agri 20 2
+     return ()
 
 
 settings :: Curses (Window, ColorID, ColorID, ColorID)
@@ -61,7 +70,7 @@ renderGame agri = do
   (w,colRed, colBlue,colWhite) <- settings
   (mx,my) <- getCursor w
   updateWindow w $ do
-    drawState agri colRed colBlue
+    drawState agri colRed colBlue colWhite
     setColor colWhite
     moveCursor mx my
   render

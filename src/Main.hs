@@ -24,7 +24,7 @@ gameLoop agri = do
   event <- waitFor w
   -- Make sure the cursor ends up where we clicked.
   case event of
-    EventMouse i mouseState -> do
+    EventMouse _ mouseState -> do
       let (mx,my,mz) =  mouseCoordinates mouseState
       updateWindow w $ moveCursor my mx
     _ -> return  ()

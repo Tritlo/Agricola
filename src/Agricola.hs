@@ -149,15 +149,65 @@ emptyPlayer :: Color ->  Player
 emptyPlayer = Player emptyFarm emptySupply 0
 
 
-data Board = Board Bool deriving (Show)
+data Gameboard = Gameboard {
+  _smallForest :: Integer,
+  _bigForest :: Integer,
+  _smallQuarry :: Integer,
+  _bigQuarry :: Integer,
+  _expand :: Integer,
+  _millpond :: (Integer, Integer),
+  _pigsAndSheep :: (Integer, Integer),
+  _cowsAndPigs :: (Integer, Integer),
+  _horsesAndSheep :: (Integer, Integer)
+                           }
 
-emptyBoard :: Board
-emptyBoard = Board False
+makeLenses ''Gameboard
+
+
+instance Show Gameboard where
+  show (Gameboard sf bf sq bq ex (mir,mis) (pip,pis) (coc,cop) (hoh,hos)) = "Gameboard status: "
+                                      ++ show sf ++ " wood and starting token in small forest, "
+                                      ++ show bf ++ " wood in big forest, "
+                                      ++ show sq ++ " stones in small quarry, "
+                                      ++ show bq ++ " stones in big quarry, "
+                                      ++ show ex ++ " fences for expansion. \n"
+                                      ++ show mir ++ " reeds and "
+                                      ++ show mis ++ " sheep in millpond. "
+                                      ++ show pip ++ " pigs and "
+                                      ++ show pis ++ " sheep in pigs and sheep. "
+                                      ++ show coc ++ " cows and "
+                                      ++ show cop ++ " pigs in cows and pigs. "
+                                      ++ show hoh ++ " horses and "
+                                      ++ show hos ++ " sheep in horses and sheep. "
+
+emptyBoard = Gameboard 0 0 0 0 0 (0,0) (0,0) (0,0) (0,0)
+
+
+refillAnimals :: (Integer, Integer) -> (Integer, Integer)
+refillAnimals (0,0) = (1,0)
+refillAnimals (a,b) = (a,b+1)
+
+refillBoard :: Gameboard -> Gameboard
+refillBoard board = board &~ do
+  smallForest += 1
+  bigForest += 3
+  smallQuarry += 1
+  bigQuarry += 2
+  expand += 1
+  millpond %= refillAnimals
+  pigsAndSheep %= refillAnimals
+  cowsAndPigs %= refillAnimals
+  horsesAndSheep %= refillAnimals
+  
+
+startingBoard :: Gameboard
+startingBoard = refillBoard emptyBoard
+  
 
 data Agricola = Agricola { _red :: Player
                          , _blue :: Player
                          , _global :: Supply
-                         , _board :: Board
+                         , _board :: Gameboard
                          , _starting :: Color
                          , _whoseTurn :: Color
                          } deriving (Show)
@@ -169,6 +219,14 @@ emptyAgricola = Agricola
                 (emptyPlayer Red) (emptyPlayer Blue)
                 emptySupply emptyBoard
                 Blue Blue
+
+
+
+data Action = DoNothing |
+              PlaceBorder Alignment Int Int |
+              TakeResources Supply
+            deriving (Eq, Show)
+
 
 instance Show Building where
   show Stall = "Stl"
@@ -274,6 +332,7 @@ startingState :: Agricola
 startingState = emptyAgricola &~ do
   player Blue %=  initPlayer
   player Red  %=  initPlayer
+  board %= refillBoard
 
 
 
