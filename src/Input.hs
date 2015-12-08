@@ -1,7 +1,7 @@
 module Input where
 
 import Agricola
-import UI.NCurses (Event(..), mouseCoordinates)
+import UI.NCurses (Event(..), mouseCoordinates, Curses)
 import Data.Maybe
 import Data.Either
 import Control.Lens
@@ -40,9 +40,9 @@ getClickAction agri (mx,my) = case getClicked agri (mx,my) of
     (Right (Border a _)) -> return $ PlaceBorder a (fromIntegral cx) (fromIntegral cy)
 
 
-getAction :: Agricola -> Event -> Maybe Action
-getAction agri (EventCharacter 'q')  =  Nothing
-getAction agri (EventCharacter 'Q')  =  Nothing
+getAction :: Agricola -> Event -> Curses (Maybe Action)
+getAction agri (EventCharacter 'q')  = return Nothing
+getAction agri (EventCharacter 'Q')  = return Nothing
 -- getAction agri (EventCharacter 'f')  =  Nothing
 -- getAction agri (EventCharacter 'F')  =  Nothing
 -- getAction agri (EventCharacter 's')  =  Nothing
@@ -55,8 +55,8 @@ getAction agri (EventCharacter 'Q')  =  Nothing
 getAction agri (EventCharacter char) = undefined
 getAction agri (EventSpecialKey key) = undefined
 
-getAction agri (EventMouse int mouseState) =  getClickAction agri (mx,my)
+getAction agri (EventMouse int mouseState) = return $ getClickAction agri (mx,my)
   where (mx,my,mz) = mouseCoordinates mouseState
 
-getAction agri EventResized = Just DoNothing
-getAction agri (EventUnknown ev) = Just DoNothing
+getAction agri EventResized = return $ Just DoNothing
+getAction agri (EventUnknown ev) = return $ Just DoNothing

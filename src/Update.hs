@@ -51,15 +51,15 @@ tryTakeAction agri (PlaceBorder alignment cx cy) =
 tryTakeAction agri (TakeResources sup) = Just (takeResources agri sup)
 tryTakeAction agri DoNothing = Just agri
 
-update :: Agricola -> Event -> Maybe Agricola
-update agri event = do
-  action <- getAction agri event
-  agri <- tryTakeAction agri action
+update :: Agricola -> Maybe Action -> Maybe Agricola
+update agri action = do
+  act <- action
+  agri <- tryTakeAction agri act
   p <-  return $ agri ^. whoseTurn
   agri <- return $ agri &~ do (player p . workers) -= 1
                               whoseTurn %= otherColor
   p <-  return $ agri ^. whoseTurn
-  if agri ^. (player p . workers) <= 0 
+  if agri ^. (player p . workers) > 0 
     then return agri
     else return $ agri &~ do board %= refillBoard;
                              (player p . workers) .= 3

@@ -2,6 +2,7 @@ module Main where
 
 import Agricola
 import Render
+import Input
 import Update
 
 
@@ -28,7 +29,8 @@ gameLoop agri = do
       let (mx,my,mz) =  mouseCoordinates mouseState
       updateWindow w $ moveCursor my mx
     _ -> return  ()
-  case update agri event of
+  action <- getAction agri event
+  case update agri action of
     Nothing -> return agri
     Just agri -> gameLoop agri
 
