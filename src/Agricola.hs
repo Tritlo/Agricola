@@ -16,10 +16,10 @@ type Coord = (Integer, Integer)
 
 data Color = Red | Blue deriving (Show)
 
-data Animals = Animals { _sheep   :: Int
-                       , _pigs    :: Int
-                       , _cows    :: Int
-                       , _horses  :: Int
+data Animals = Animals { _sheep   :: Integer
+                       , _pigs    :: Integer
+                       , _cows    :: Integer
+                       , _horses  :: Integer
                        } deriving Eq
 makeLenses ''Animals
 
@@ -32,11 +32,11 @@ instance Show Animals where
                                ++ show co ++ " cows "
                                ++ show ho  ++ " horses."
 
-data Supply = Supply { _borders :: Int
-                     , _wood    :: Int
-                     , _stones  :: Int
-                     , _reeds   :: Int
-                     , _animalsupply :: Animals
+data Supply = Supply { _borders :: Integer
+                     , _wood    :: Integer
+                     , _stones  :: Integer
+                     , _reeds   :: Integer
+                     , _animals :: Animals
                      } deriving (Eq)
 makeLenses ''Supply
 
@@ -67,7 +67,7 @@ data Border = Border {  _alignment ::  Alignment
 makeLenses ''Border
 
 data Tile = Tile { _building :: Maybe Building
-                 , _animals :: Maybe (Animal, Int)
+                 , _tileanimals :: Maybe (Animal, Integer)
                  , _trough :: Bool
                  }
 
@@ -140,7 +140,7 @@ instance Show Farm where
 
 data Player = Player { _farm :: Farm
                      , _supply :: Supply
-                     , _workers :: Int
+                     , _workers :: Integer
                      , _color :: Color
                      } deriving (Show)
 makeLenses ''Player
@@ -223,7 +223,7 @@ emptyAgricola = Agricola
 
 
 data Action = DoNothing |
-              PlaceBorder Alignment Int Int |
+              PlaceBorder Alignment Integer Integer |
               TakeResources Supply
             deriving (Eq, Show)
 
@@ -259,7 +259,7 @@ showTro :: Bool -> String
 showTro False = " "
 showTro True = "T"
 
-showAn :: Maybe (Animal, Int) -> String
+showAn :: Maybe (Animal, Integer) -> String
 showAn Nothing = "0 A"
 showAn (Just (an, count)) = show count ++ " " ++ show an
 
@@ -286,31 +286,31 @@ printFarm farm = mapM_ putStrLn $ lines $ showFarm farm
 
 
 -- Getters and setters for a border
-_border :: Alignment -> Int -> Int -> Farm -> Border
-_border H n m  farm = farm ^. singular (hborders . element n . element m)
-_border V n m farm = farm ^.  singular (vborders . element n  . element m)
+_border :: Alignment -> Integer -> Integer -> Farm -> Border
+_border H n m  farm = farm ^. singular (hborders . element (fromInteger n) . element (fromInteger m))
+_border V n m farm = farm ^.  singular (vborders . element (fromInteger n)  . element (fromInteger m))
 
-_setBorder :: Alignment -> Int -> Int -> Farm -> Border -> Farm
+_setBorder :: Alignment -> Integer -> Integer -> Farm -> Border -> Farm
 _setBorder H n m farm nb@(Border H _) = farm & singular
-                                        (hborders . element n . element m)
+                                        (hborders . element (fromInteger n) . element (fromInteger m))
                                         .~ nb
 _setBorder V n m farm nb@(Border V _) = farm & singular
-                                        (vborders . element n . element m)
+                                        (vborders . element (fromInteger n) . element (fromInteger m))
                                         .~ nb
 
-border :: Alignment -> Int -> Int -> Lens' Farm Border
+border :: Alignment -> Integer -> Integer -> Lens' Farm Border
 border al n m = lens (_border al n m) (_setBorder al n m)
 
 -- Getters and setters for a tile
-_tile :: Int -> Int -> Farm -> Tile
-_tile n m farm = farm ^. singular (tiles . element n . element m)
+_tile :: Integer -> Integer -> Farm -> Tile
+_tile n m farm = farm ^. singular (tiles . element (fromInteger n) . element (fromInteger m))
 
-_setTile :: Int -> Int -> Farm -> Tile -> Farm
+_setTile :: Integer -> Integer -> Farm -> Tile -> Farm
 _setTile n m farm newtile = farm & singular
-                            (tiles . element n . element m)
+                            (tiles . element (fromInteger n) . element (fromInteger m))
                             .~ newtile
 
-tile :: Int -> Int -> Lens' Farm Tile
+tile :: Integer -> Integer -> Lens' Farm Tile
 tile n m = lens (_tile n m) (_setTile n m)
 
 

@@ -7,12 +7,13 @@ import qualified UI.NCurses
 import Control.Lens
 
 
-drawLines :: Integer -> Integer -> [String] -> Update Integer
+drawLines :: Integral a => a -> a -> [String] -> Update a
 drawLines n _ [] = return n
 drawLines n m (l:ls) = do
-    moveCursor n m
+    moveCursor n' m'
     drawString l
     drawLines (n+1) m ls
+    where (n',m') =   (toInteger n, toInteger m)
 
 drawFarm :: Agricola -> Ag.Color -> Update Integer
 drawFarm agri col = drawLines (snd $ farmOffset col) (fst $ farmOffset col) $
