@@ -143,11 +143,10 @@ update agri action = do
   --                            (player p . workers) .= 3
   --                            (player (otherColor p ) . workers) .= 3
 tryPlaceAnimal :: Agricola -> Coord -> Animal -> Maybe Agricola
-tryPlaceAnimal agri c anml = 
-  if isLegalAnimal agri c anml then
-    do let newAgri = placeAnimal agri c anml
-       return newAgri
-  else return agri
+tryPlaceAnimal agri c anml =
+  if (isLegalAnimalPlacement agri c anml)
+  then (Just $ placeAnimal agri c anml)
+  else (Just agri)
 
 animalLens :: Functor f => Animal -> (Integer -> f Integer) -> Animals -> f Animals
 animalLens Sheep = sheep
@@ -161,12 +160,6 @@ placeAnimal agri (cx,cy) animal = agri &~ do
   player colr . supply . animals . animalLens animal -= 1
   player colr . farm . tile cx cy . tileanimals %= addAnimal animal
 
-addAnimal :: Animal -> Maybe (Animal,Integer) -> Maybe (Animal,Integer)
-addAnimal a Nothing = Just (a,1)
-addAnimal _ (Just (a,n)) = Just (a,n+1)
-
-
-isLegalAnimal = undefined
 
 
 hasWorkers :: Agricola -> Bool
@@ -189,6 +182,43 @@ isLegal agri TakeHorsesAndSheep = hasWorkers agri && isJust (agri ^. board . hor
 isLegal agri a = error $ "did not find legal for " ++ show a
 
 
+addAnimal a Nothing      = Just (a,1)
+addAnimal a (Just (b,n)) | a == b = Just (a,n+1)
+addAnimal _ _            = error "Cannot add different animal"
+
+
+isLegalAnimalPlacement :: Agricola -> Coord -> Animal -> Bool
+isLegalAnimalPlacement = undefined
+
+isSameAnimal :: Agricola -> Coord -> Animal -> Bool
+isSameAnimal agri (cx,cy) an =
+  let colr = agri ^. whoseTurn in
+      let tileAn = agri ^. player colr . farm . tile cx cy . tileanimals in
+      isNothing tileAn || (fst $ fromJust tileAn) == an
+
+isEnclosed :: Agricola -> Coord -> Bool
+isEnclosed agri c = let col = agri ^. whoseTurn in
+  and [isEnclosed' agri col c d | d <- [N,S,E,W]]
+
+data Direction = N | S | E | W deriving (Eq)
+
+-- TODO : update East to allow extensions
+isEnclosed' :: Agricola -> Color -> Coord -> Direction -> Bool
+isEnclosed' agri col (x,0) N = hasBorder agri col (x,0) N
+isEnclosed' agri col (x,y) N = hasBorder agri col (x,y) N || isEnclosed' agri col (x,y-1) N
+isEnclosed' agri col (x,2) S = hasBorder agri col (x,2) S
+isEnclosed' agri col (x,y) S = hasBorder agri col (x,y) S || isEnclosed' agri col (x,y+1) S
+isEnclosed' agri col (0,y) W = hasBorder agri col (0,y) W
+isEnclosed' agri col (x,y) W = hasBorder agri col (x,y) W || isEnclosed' agri col (x-1,y) W
+isEnclosed' agri col (1,y) E = hasBorder agri col (1,y) E
+isEnclosed' agri col (x,y) E = hasBorder agri col (x,y) E || isEnclosed' agri col (x+1,y) E
+
+hasBorder :: Agricola -> Color -> Coord -> Direction -> Bool
+hasBorder agri col (cx,cy) N = agri ^. player col . farm . border H cy cx . isThere
+hasBorder agri col (cx,cy) S = agri ^. player col . farm . border H (cy+1) cx . isThere
+hasBorder agri col (cx,cy) W = agri ^. player col . farm . border V cy cx . isThere
+hasBorder agri col (cx,cy) E = agri ^. player col . farm . border V cy (cx+1) . isThere
+--(player color . farm . border al n m . isThere )
 -- enclosed?
 -- free space?
 -- correct animal type?
