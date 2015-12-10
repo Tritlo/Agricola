@@ -45,16 +45,17 @@ getClickAction agri (mx,my) = case getClicked agri (mx,my) of
 getAction :: Agricola -> Event -> Curses (Maybe Action)
 getAction agri (EventCharacter 'q')  = return Nothing
 getAction agri (EventCharacter 'Q')  = return Nothing
--- getAction agri (EventCharacter 'f')  =  Nothing
--- getAction agri (EventCharacter 'F')  =  Nothing
--- getAction agri (EventCharacter 's')  =  Nothing
--- getAction agri (EventCharacter 'S')  =  Nothing
--- getAction agri (EventCharacter 'e')  =  Nothing
--- getAction agri (EventCharacter 'm')  =  Nothing
--- getAction agri (EventCharacter 'p')  =  Nothing
--- getAction agri (EventCharacter 'c')  =  Nothing
--- getAction agri (EventCharacter 'h')  =  Nothing
-getAction agri (EventCharacter 'r')  = return $ Just (TakeResources (Supply 0 1 1 1 emptyAnimals))
+getAction agri (EventCharacter 't') =   return $ Just  EndTurn
+getAction agri (EventCharacter 'f')  =  return $ Just TakeSmallForest
+getAction agri (EventCharacter 'F')  =  return $ Just TakeBigForest
+getAction agri (EventCharacter 's')  =  return $ Just TakeSmallQuarry
+getAction agri (EventCharacter 'S')  =  return $ Just TakeBigQuarry
+getAction agri (EventCharacter 'e')  =  return $ Just TakeExpand
+getAction agri (EventCharacter 'm')  =  return $ Just TakeMillpond
+getAction agri (EventCharacter 'p')  =  return $ Just TakePigsAndSheep
+getAction agri (EventCharacter 'c')  =  return $ Just TakeCowsAndPigs
+getAction agri (EventCharacter 'h')  =  return $ Just TakeHorsesAndSheep
+getAction agri (EventCharacter 'r')  =  return $ Just TakeResources
 getAction agri (EventCharacter 'b') = do
   (w, _,_,_) <- settings
   (mx,my) <- getCursor w

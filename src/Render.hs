@@ -32,6 +32,16 @@ drawBoard agri x y= drawLines x y $ lines $ show $ agri ^. board
 instructions :: String
 instructions = "Press (b) to place border." ++ "\n"
                ++ "Press (r) to take resources." ++ "\n"
+               ++ "Press (f) to take small forest." ++ "\n"
+               ++ "Press (F) to take big forest." ++ "\n"
+               ++ "Press (s) to take small quarry." ++ "\n"
+               ++ "Press (S) to take big quarry." ++ "\n"
+               ++ "Press (e) to take expand." ++ "\n"
+               ++ "Press (m) to take millpond." ++ "\n"
+               ++ "Press (p) to take pigs and sheep." ++ "\n"
+               ++ "Press (c) to take cows and pigs." ++ "\n"
+               ++ "Press (h) to take horses and sheep." ++ "\n"
+               ++ "Press (t) to end turn." ++ "\n"
 drawState :: Agricola -> ColorID -> ColorID -> ColorID -> Update ()
 drawState agri colRed colBlue colBoard = do
      clear

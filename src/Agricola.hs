@@ -9,6 +9,7 @@ import Control.Lens
 import Data.Either
 import Data.List
 import Test.QuickCheck
+import Control.Monad.State
 
 
 
@@ -150,59 +151,128 @@ emptyPlayer = Player emptyFarm emptySupply 0
 
 
 data Gameboard = Gameboard {
-  _smallForest :: Integer,
-  _bigForest :: Integer,
-  _smallQuarry :: Integer,
-  _bigQuarry :: Integer,
-  _expand :: Integer,
-  _millpond :: (Integer, Integer),
-  _pigsAndSheep :: (Integer, Integer),
-  _cowsAndPigs :: (Integer, Integer),
-  _horsesAndSheep :: (Integer, Integer)
+    _smallForest :: Maybe Integer
+  , _bigForest :: Maybe Integer
+  , _smallQuarry :: Maybe Integer
+  , _bigQuarry :: Maybe Integer
+  , _expand :: Maybe Integer
+  , _millpond :: Maybe (Integer, Integer)
+  , _pigsAndSheep :: Maybe (Integer, Integer)
+  , _cowsAndPigs :: Maybe (Integer, Integer)
+  , _horsesAndSheep :: Maybe (Integer, Integer)
+  , _resources :: Maybe ()
                            }
-
 makeLenses ''Gameboard
 
 
+
+append :: MonadState [a] m => [a] -> m ()
+append s = id %= flip (++) s
+
+
 instance Show Gameboard where
-  show (Gameboard sf bf sq bq ex (mir,mis) (pip,pis) (coc,cop) (hoh,hos)) = "Gameboard status: "
-                                      ++ show sf ++ " wood and starting token in small forest, "
-                                      ++ show bf ++ " wood in big forest, "
-                                      ++ show sq ++ " stones in small quarry, "
-                                      ++ show bq ++ " stones in big quarry, "
-                                      ++ show ex ++ " fences for expansion. \n"
-                                      ++ show mir ++ " reeds and "
-                                      ++ show mis ++ " sheep in millpond. "
-                                      ++ show pip ++ " pigs and "
-                                      ++ show pis ++ " sheep in pigs and sheep. "
-                                      ++ show coc ++ " cows and "
-                                      ++ show cop ++ " pigs in cows and pigs. "
-                                      ++ show hoh ++ " horses and "
-                                      ++ show hos ++ " sheep in horses and sheep. "
+  show board = "" &~ do
+    append "Gameboard status: "
+    case _smallForest board of
+      Nothing -> append "Worker on"
+      Just i -> append $ show i ++ " wood and starting token in"
+    append " small forest, "
+    case _bigForest board of
+      Nothing -> append "Worker on"
+      Just i -> append $ show i ++ " wood in"
+    append " big forest, "
+    case _smallQuarry board of
+      Nothing -> append "Worker on"
+      Just i -> append $ show i ++ " stones in"
+    append " small quarry, "
+    case _bigQuarry board of
+      Nothing -> append "Worker on"
+      Just i -> append $ show i ++ " stones in"
+    append " big quarry, "
+    case _expand board of
+      Nothing -> append "Worker on"
+      Just i -> append $ show i ++ " fences for"
+    append " expansion. \n"
+    case _millpond board of
+      Nothing -> append "Worker on"
+      Just (a, b) -> append $ show a ++ " reeds and " ++ show b ++ " sheep in"
+    append " millpond, "
+    case _pigsAndSheep board of
+      Nothing -> append "Worker on"
+      Just (a, b) -> append $ show a ++ " pigs and " ++ show b ++ " sheep in"
+    append " pigs and sheep, "
+    case _cowsAndPigs board of
+      Nothing -> append  "Worker on"
+      Just (a, b) -> append $ show a ++ " cows and " ++ show b ++ " pigs in"
+    append " cows and pigs, "
+    case _horsesAndSheep board of
+      Nothing -> append  "Worker on"
+      Just (a, b) -> append $ show a ++ " horses and " ++ show b ++ " sheep in"
+    append " horses and sheep.\n"
+    case _resources board of
+      Nothing -> append "Worker on"
+      Just _ -> append "No worker on"
+    append " resources."
 
-emptyBoard = Gameboard 0 0 0 0 0 (0,0) (0,0) (0,0) (0,0)
 
 
-refillAnimals :: (Integer, Integer) -> (Integer, Integer)
-refillAnimals (0,0) = (1,0)
-refillAnimals (a,b) = (a,b+1)
+emptyBoard = Gameboard {
+    _smallForest = Nothing
+  , _bigForest = Nothing
+  , _smallQuarry = Nothing
+  , _bigQuarry = Nothing
+  , _expand = Nothing
+  , _millpond = Nothing
+  , _pigsAndSheep = Nothing
+  , _cowsAndPigs = Nothing
+  , _horsesAndSheep = Nothing
+  , _resources = Nothing
+                       }
+
+
+
+removeWorkerOfSingle :: Maybe Integer -> Maybe Integer
+removeWorkerOfSingle Nothing = Just 0
+removeWorkerOfSingle a = a
+
+removeWorkerOfAnimals :: Maybe (Integer, Integer) -> Maybe (Integer, Integer)
+removeWorkerOfAnimals Nothing = Just (0, 0)
+removeWorkerOfAnimals a = a
+
+takeWorkers :: Gameboard -> Gameboard
+takeWorkers board = board &~ do
+  smallForest %= removeWorkerOfSingle
+  bigForest   %= removeWorkerOfSingle
+  smallQuarry %= removeWorkerOfSingle
+  bigQuarry   %= removeWorkerOfSingle
+  expand      %= removeWorkerOfSingle
+  millpond        %= removeWorkerOfAnimals
+  pigsAndSheep    %= removeWorkerOfAnimals
+  cowsAndPigs     %= removeWorkerOfAnimals
+  horsesAndSheep  %= removeWorkerOfAnimals
+  resources      .= Just ()
+
+-- Workers must have been remove prior, i.e. no nothing
+refillAnimals :: Maybe (Integer, Integer) -> Maybe (Integer, Integer)
+refillAnimals (Just (0,0)) = Just (1,0)
+refillAnimals (Just (a,b)) = Just (a,b+1)
+
 
 refillBoard :: Gameboard -> Gameboard
 refillBoard board = board &~ do
-  smallForest += 1
-  bigForest += 3
-  smallQuarry += 1
-  bigQuarry += 2
-  expand += 1
+  smallForest %= fmap (+ 1)
+  bigForest %= fmap (+ 3)
+  smallQuarry %= fmap (+ 1)
+  bigQuarry %= fmap (+ 2)
+  expand %= fmap (+ 1)
   millpond %= refillAnimals
   pigsAndSheep %= refillAnimals
   cowsAndPigs %= refillAnimals
   horsesAndSheep %= refillAnimals
-  
 
 startingBoard :: Gameboard
-startingBoard = refillBoard emptyBoard
-  
+startingBoard = (refillBoard . takeWorkers)  emptyBoard
+
 
 data Agricola = Agricola { _red :: Player
                          , _blue :: Player
@@ -222,9 +292,19 @@ emptyAgricola = Agricola
 
 
 
-data Action = DoNothing |
-              PlaceBorder Alignment Integer Integer |
-              TakeResources Supply
+data Action = DoNothing
+              | PlaceBorder Alignment Integer Integer
+              | EndTurn
+              | TakeResources
+              | TakeSmallForest
+              | TakeBigForest
+              | TakeSmallQuarry
+              | TakeBigQuarry
+              | TakeExpand
+              | TakeMillpond
+              | TakePigsAndSheep
+              | TakeCowsAndPigs
+              | TakeHorsesAndSheep
             deriving (Eq, Show)
 
 
@@ -332,7 +412,7 @@ startingState :: Agricola
 startingState = emptyAgricola &~ do
   player Blue %=  initPlayer
   player Red  %=  initPlayer
-  board %= refillBoard
+  board .= startingBoard
 
 
 
