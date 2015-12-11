@@ -165,6 +165,10 @@ placeAnimal agri (cx,cy) animal = agri &~ do
 hasWorkers :: Agricola -> Bool
 hasWorkers agri = agri ^. (player (agri ^. whoseTurn) . workers) > 0
 
+hasAnimals :: Agricola -> Integer -> Integer -> Bool
+hasAnimals agri cx cy = let col = agri ^. whoseTurn in
+  isJust (agri ^. (player col . farm . tile cx cy . tileanimals))
+
 isLegal :: Agricola -> Action ->  Bool
 isLegal _ EndTurn = True
 isLegal _ DoNothing = True
@@ -179,6 +183,8 @@ isLegal agri TakeMillpond       = hasWorkers agri && isJust (agri ^. board . mil
 isLegal agri TakePigsAndSheep   = hasWorkers agri && isJust (agri ^. board . pigsAndSheep)
 isLegal agri TakeCowsAndPigs    = hasWorkers agri && isJust (agri ^. board . cowsAndPigs)
 isLegal agri TakeHorsesAndSheep = hasWorkers agri && isJust (agri ^. board . horsesAndSheep)
+isLegal agri (TakeAnimal cx cy) = hasAnimals agri cx cy
+isLegal agri (PlaceAnimal an cx cy) = isLegalAnimalPlacement agri (cx,cy) an
 isLegal agri a = error $ "did not find legal for " ++ show a
 
 
