@@ -83,6 +83,8 @@ breedAnimal col an agri = agri &~ when (countAnimal agri col an >= 2)
 takeAction :: Agricola -> Action -> Agricola
 takeAction agri DoNothing = agri
 takeAction agri (PlaceBorder al cx cy) = placeBorder agri al cx cy
+takeAction agri (PlaceBorder al cx cy) = placeBorder agri al cy cx
+takeAction agri (PlaceAnimal ani cx cy) = placeAnimal agri (cx,cy) ani
 takeAction agri (FreeAnimal an) = agri &~ do
   col <- use whoseTurn
   player col . supply . animals . animalLens an -= 1
@@ -175,6 +177,14 @@ takeAction agri TakeExpand = agri &~ do
   board . expand .= Nothing
   subtractWorker
 
+takeAction agri (TakeAnimal cx cy) = agri &~ do
+  playerColor <- use whoseTurn
+  Just (ani,n) <- use (player playerColor . farm . tile cx cy .tileanimals)
+  player playerColor . supply . animals . animalLens ani += 1
+  if (n == 1)
+    then player playerColor . farm . tile cx cy .tileanimals .= Nothing
+    else player playerColor . farm . tile cx cy .tileanimals .= Just (ani,n-1)
+         
 tryTakeAction :: Agricola -> Action -> Maybe Agricola
 tryTakeAction agri action =
   case isProblem agri action of
@@ -190,20 +200,6 @@ update agri action = do
   act <- action
   agri <- tryTakeAction agri act
   return agri
-  -- p <-  return $ agri ^. whoseTurn
-  -- agri <- return $ agri &~ do (player p . workers) -= 1
-  --                             whoseTurn %= otherColor
-  -- let p = agri ^. whoseTurn
-  -- if agri ^. (player p . workers) > 0
-  --   then return agri
-  --   else return $ agri &~ do board %= refillBoard;
-  --                            (player p . workers) .= 3
-  --                            (player (otherColor p ) . workers) .= 3
-tryPlaceAnimal :: Agricola -> Coord -> Animal -> Maybe Agricola
-tryPlaceAnimal agri c anml =
-  if (isLegalAnimalPlacement agri c anml)
-  then (Just $ placeAnimal agri c anml)
-  else (Just agri)
 
 animalLens :: Functor f => Animal -> (Integer -> f Integer) -> Animals -> f Animals
 animalLens Sheep = sheep
@@ -221,6 +217,11 @@ placeAnimal agri (cx,cy) animal = agri &~ do
 
 hasWorkers :: Agricola -> Bool
 hasWorkers agri = agri ^. (player (agri ^. whoseTurn) . workers) > 0
+
+hasAnimals :: Agricola -> Integer -> Integer -> Bool
+hasAnimals agri cx cy = let col = agri ^. whoseTurn in
+  isJust (agri ^. (player col . farm . tile cx cy . tileanimals))
+
 
 boardSpaceFree :: Agricola -> Action -> Bool
 boardSpaceFree agri TakeResources      = isJust (agri ^. board . resources)
@@ -271,6 +272,20 @@ isProblem agri (PlaceBorder al cx cy) =
      else Just "because you don't have enough borders"
   where col = agri ^. whoseTurn
 
+isProblem agri (TakeAnimal cx cy) = if not (hasAnimals agri cx cy)
+                                    then Just "since there are no animals on the tile"
+                                    else Nothing
+
+                                         
+isProblem agri (PlaceAnimal ani cx cy) = if (agri ^. (player col . supply . animals . animalLens ani) == 0)
+                                            then Just "because there is no animal of that type to place"
+                                            else if not (isSameAnimal agri col c ani)
+                                                 then Just "because there is already an animal of another type there"
+                                                 else if (animalSpace agri col c <= 0)
+                                                      then Just "because there is not enough room there"
+                                                      else Nothing
+                                          where col = agri ^. whoseTurn
+                                                c = (cx,cy)
 isProblem agri (FreeAnimal an) =
   if agri ^. (player col . supply . animals . animalLens an) == 0
      then Just "you have none in your supply"
@@ -292,10 +307,6 @@ addAnimal a (Just (b,n)) | a == b = Just (a,n+1)
 addAnimal _ _            = error "Cannot add different animal"
 
 
-isLegalAnimalPlacement :: Agricola -> Coord -> Animal -> Bool
-isLegalAnimalPlacement agri c ani =
-  let col = agri ^. whoseTurn in
-      isSameAnimal agri col c ani && (animalSpace agri col c > 0)
 
 isSameAnimal :: Agricola -> Color -> Coord -> Animal -> Bool
 isSameAnimal agri colr (cx,cy) an =
