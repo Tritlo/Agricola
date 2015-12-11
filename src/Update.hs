@@ -121,6 +121,11 @@ takeAction agri TakeExpand = agri &~ do
   player playerColor . supply . borders += b
   subtractWorker
 
+takeAction agri (TakeAnimal cx cy) = agri &~ do
+  playerColor <- use whoseTurn
+  Just (ani,n) <- use (player playerColor . farm . tile cx cy .tileanimals)
+  player playerColor . supply . animals . animalLens ani += 1
+
 tryTakeAction :: Agricola -> Action -> Maybe Agricola
 tryTakeAction agri action =
   if isLegal agri action
