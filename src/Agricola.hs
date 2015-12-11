@@ -317,6 +317,8 @@ data Action = DoNothing
               | TakePigsAndSheep
               | TakeCowsAndPigs
               | TakeHorsesAndSheep
+              | TakeAnimal Integer Integer
+              | PlaceAnimal Animal Integer Integer
             deriving (Eq)
 
 
@@ -338,6 +340,8 @@ instance Show Action where
   show TakeHorsesAndSheep = "take from horses and sheep"
   show EndPhase = "end phase"
   show (FreeAnimal a) =  "free a " ++ show a
+  show (TakeAnimal n m) = "take animal from tile " ++ show n ++", " ++ show m
+  show (PlaceAnimal a n m) = "place " ++ show a ++ " on tile " ++ show n ++", " ++ show m
 
 
 instance Show Building where

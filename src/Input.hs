@@ -34,12 +34,17 @@ getClicked agri coords = do
         (Right _) -> length $ rights $ catMaybes beforeInLine
   return (color,itm,  (fromIntegral nx , fromIntegral oy `div` 2  ))
 
-getClickAction :: Agricola -> Coord -> Maybe Action
-getClickAction agri (mx,my) = case getClicked agri (mx,my) of
-  Nothing -> return DoNothing
-  Just (col, item, (cx,cy)) -> case item of
-    Left _ -> return DoNothing
-    (Right (Border a _)) -> return $ PlaceBorder a (fromIntegral cx) (fromIntegral cy)
+
+-- If these pattern matches fail, the result is nothing (which is what we want)
+clickedBorder :: Agricola -> Coord -> Maybe (Alignment, Integer, Integer)
+clickedBorder agri (mx,my) = do
+  (col, Right (Border a _), (cx,cy)) <- getClicked agri (mx,my)
+  return (a, fromIntegral cx, fromIntegral cy)
+
+clickedTile :: Agricola -> Coord -> Maybe (Integer, Integer)
+clickedTile agri (mx,my) = do
+  (col, Left _, (cx,cy)) <- getClicked agri (mx,my) 
+  return (fromIntegral cx, fromIntegral cy)
 
 
 getAction :: Agricola -> Event -> Curses (Maybe Action)
@@ -86,7 +91,9 @@ getAction agri (EventCharacter 'b') = do
   return Nothing
   ev <- waitFor w
   case ev of
-    m@(EventMouse _ mouseState) -> return $ getClickAction agri (mx,my)
+    m@(EventMouse _ mouseState) -> case clickedBorder agri (mx,my) of
+      Nothing -> return $ Just DoNothing
+      Just (a, x,y) -> return $ Just $ PlaceBorder a x y
       where (mx,my,mz) = mouseCoordinates mouseState
     EventCharacter 'q' -> return Nothing
     EventCharacter 'Q' -> return Nothing
