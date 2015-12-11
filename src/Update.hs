@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 module Update where
 
@@ -54,16 +55,75 @@ subtractWorker :: StateT Agricola Identity ()
 subtractWorker = do
   playerColor <- use whoseTurn
   (player playerColor . workers) -= 1
+  hasPlacedWorker .= True
+
+
+breedAnimals :: Agricola -> Agricola
+breedAnimals agri = agri &~ do
+  id %= breedAnimals' Red
+  id %= breedAnimals'  Blue
+
+
+countAnimalInTiles :: Animal -> [[Tile]] -> Integer
+countAnimalInTiles an ts = sum (map countInRow ts)
+  where countInRow r = sum (map countInTile r)
+        countInTile t = case _tileanimals t of
+          Nothing -> 0
+          Just (b, n) -> if an == b then n else 0
+
+
+countAnimal :: Agricola -> Color -> Animal -> Integer
+countAnimal agri col animal = countAnimalInTiles animal ts
+  where ts = agri ^. (player col . farm . tiles)
+                                 
+
+
+breedAnimals' :: Color -> Agricola -> Agricola
+breedAnimals' col agri = agri &~ do
+  id %= breedAnimal col Sheep
+  id %= breedAnimal col Pig
+  id %= breedAnimal col Cow
+  id %= breedAnimal col Horse
+  
+
+breedAnimal ::  Color -> Animal -> Agricola -> Agricola
+breedAnimal col an agri = agri &~ when (countAnimal agri col an >= 2)
+                          (player col . supply . animals . animalLens an += 1)
 
 takeAction :: Agricola -> Action -> Agricola
 takeAction agri DoNothing = agri
 takeAction agri (PlaceBorder al cx cy) = placeBorder agri al cy cx
-takeAction agri EndTurn = agri & whoseTurn %~ otherColor
+takeAction agri (PlaceAnimal ani cx cy) = placeAnimal agri (cx,cy) ani
+takeAction agri (FreeAnimal an) = agri &~ do
+  col <- use whoseTurn
+  player col . supply . animals . animalLens an -= 1
+  
+takeAction agri EndTurn = agri &~ do
+  whoseTurn %= otherColor
+  curphase <- use phase
+  when (curphase == WorkPhase) $ hasPlacedWorker .= False
+      
+takeAction agri EndPhase = agri &~ do
+  curphase <- use phase
+  case curphase of
+    BreedingPhase -> do
+        whoseTurn .= (agri ^. starting)
+        hasPlacedWorker .= False
+        red . workers .= 3
+        blue . workers .= 3
+        board %= takeWorkers
+        board %= refillBoard
+        phase .= WorkPhase
+    WorkPhase -> do
+      id %= breedAnimals 
+      phase .= BreedingPhase
+      whoseTurn .= (agri ^. starting)
+      hasPlacedWorker .= True
+      
 takeAction agri TakeResources = agri &~ do
   id %= flip takeResources (Supply 0 1 1 1 emptyAnimals)
-  playerColor <- use whoseTurn
-  (player playerColor . workers) -= 1
   board . resources .= Nothing
+  subtractWorker
 
 takeAction agri TakeMillpond = agri &~ do
   Just (rs,sh) <- use (board . millpond )
@@ -94,12 +154,14 @@ takeAction agri TakeSmallForest = agri &~ do
   playerColor <- use whoseTurn
   player playerColor . supply . wood += w
   starting .= playerColor
+  board . smallForest .= Nothing
   subtractWorker
 
 takeAction agri TakeBigForest = agri &~ do
   Just w <- use (board . bigForest)
   playerColor <- use whoseTurn
   player playerColor . supply . wood += w
+  board . bigForest .= Nothing
   subtractWorker
 
 takeAction agri TakeSmallQuarry = agri &~ do
@@ -107,30 +169,39 @@ takeAction agri TakeSmallQuarry = agri &~ do
   playerColor <- use whoseTurn
   player playerColor . supply . stones += s
   starting .= playerColor
+  board . smallQuarry .= Nothing
   subtractWorker
 
 takeAction agri TakeBigQuarry = agri &~ do
   Just s <- use (board . bigQuarry)
   playerColor <- use whoseTurn
   player playerColor . supply . stones += s
+  board . bigQuarry .= Nothing
   subtractWorker
 
 takeAction agri TakeExpand = agri &~ do
   Just b <- use (board . expand)
   playerColor <- use whoseTurn
   player playerColor . supply . borders += b
+  board . expand .= Nothing
   subtractWorker
 
 takeAction agri (TakeAnimal cx cy) = agri &~ do
   playerColor <- use whoseTurn
   Just (ani,n) <- use (player playerColor . farm . tile cx cy .tileanimals)
   player playerColor . supply . animals . animalLens ani += 1
-
+  if (n == 1)
+    then player playerColor . farm . tile cx cy .tileanimals .= Nothing
+    else player playerColor . farm . tile cx cy .tileanimals .= Just (ani,n-1)
+         
 tryTakeAction :: Agricola -> Action -> Maybe Agricola
 tryTakeAction agri action =
-  if isLegal agri action
-  then return $ takeAction agri action
-  else return agri
+  case isProblem agri action of
+  Nothing -> let newagri =  takeAction agri action in
+    return $ newagri & message .~ ""
+  Just err -> return $ agri & message .~ ("Cannot " ++ show action ++ ", " ++ err)
+
+
 
 
 update :: Agricola -> Maybe Action -> Maybe Agricola
@@ -138,20 +209,6 @@ update agri action = do
   act <- action
   agri <- tryTakeAction agri act
   return agri
-  -- p <-  return $ agri ^. whoseTurn
-  -- agri <- return $ agri &~ do (player p . workers) -= 1
-  --                             whoseTurn %= otherColor
-  -- let p = agri ^. whoseTurn
-  -- if agri ^. (player p . workers) > 0
-  --   then return agri
-  --   else return $ agri &~ do board %= refillBoard;
-  --                            (player p . workers) .= 3
-  --                            (player (otherColor p ) . workers) .= 3
-tryPlaceAnimal :: Agricola -> Coord -> Animal -> Maybe Agricola
-tryPlaceAnimal agri c anml =
-  if (isLegalAnimalPlacement agri c anml)
-  then (Just $ placeAnimal agri c anml)
-  else (Just agri)
 
 animalLens :: Functor f => Animal -> (Integer -> f Integer) -> Animals -> f Animals
 animalLens Sheep = sheep
@@ -174,23 +231,80 @@ hasAnimals :: Agricola -> Integer -> Integer -> Bool
 hasAnimals agri cx cy = let col = agri ^. whoseTurn in
   isJust (agri ^. (player col . farm . tile cx cy . tileanimals))
 
-isLegal :: Agricola -> Action ->  Bool
-isLegal _ EndTurn = True
-isLegal _ DoNothing = True
-isLegal agri (PlaceBorder al cx cy) = canPlaceBorder agri al cy cx (agri ^. whoseTurn)
-isLegal agri TakeResources      = hasWorkers agri && isJust (agri ^. board . resources)
-isLegal agri TakeSmallForest    = hasWorkers agri && isJust (agri ^. board . smallForest)
-isLegal agri TakeBigForest      = hasWorkers agri && isJust (agri ^. board . bigForest)
-isLegal agri TakeSmallQuarry    = hasWorkers agri && isJust (agri ^. board . smallQuarry)
-isLegal agri TakeBigQuarry      = hasWorkers agri && isJust (agri ^. board . bigQuarry)
-isLegal agri TakeExpand         = hasWorkers agri && isJust (agri ^. board . expand)
-isLegal agri TakeMillpond       = hasWorkers agri && isJust (agri ^. board . millpond)
-isLegal agri TakePigsAndSheep   = hasWorkers agri && isJust (agri ^. board . pigsAndSheep)
-isLegal agri TakeCowsAndPigs    = hasWorkers agri && isJust (agri ^. board . cowsAndPigs)
-isLegal agri TakeHorsesAndSheep = hasWorkers agri && isJust (agri ^. board . horsesAndSheep)
-isLegal agri (TakeAnimal cx cy) = hasAnimals agri cx cy
-isLegal agri (PlaceAnimal an cx cy) = isLegalAnimalPlacement agri (cx,cy) an
-isLegal agri a = error $ "did not find legal for " ++ show a
+
+boardSpaceFree :: Agricola -> Action -> Bool
+boardSpaceFree agri TakeResources      = isJust (agri ^. board . resources)
+boardSpaceFree agri TakeSmallForest    = isJust (agri ^. board . smallForest)
+boardSpaceFree agri TakeBigForest      = isJust (agri ^. board . bigForest)
+boardSpaceFree agri TakeSmallQuarry    = isJust (agri ^. board . smallQuarry)
+boardSpaceFree agri TakeBigQuarry      = isJust (agri ^. board . bigQuarry)
+boardSpaceFree agri TakeExpand         = isJust (agri ^. board . expand)
+boardSpaceFree agri TakeMillpond       = isJust (agri ^. board . millpond)
+boardSpaceFree agri TakePigsAndSheep   = isJust (agri ^. board . pigsAndSheep)
+boardSpaceFree agri TakeCowsAndPigs    = isJust (agri ^. board . cowsAndPigs)
+boardSpaceFree agri TakeHorsesAndSheep = isJust (agri ^. board . horsesAndSheep)
+
+
+workerActions :: [Action]
+workerActions = [ TakeResources
+                , TakeSmallForest
+                , TakeBigForest
+                , TakeSmallQuarry
+                , TakeBigQuarry
+                , TakeExpand
+                , TakeMillpond
+                , TakePigsAndSheep
+                , TakeCowsAndPigs
+                , TakeHorsesAndSheep
+                ]
+
+isProblem :: Agricola -> Action ->  Maybe String
+isProblem agri EndTurn = if hasWorkers agri && not (agri ^. hasPlacedWorker)
+                         then Just $ show col ++ " has to place worker"
+                         else Nothing
+  where col = agri ^. whoseTurn
+isProblem agri EndPhase =
+  case isProblem agri EndTurn of
+  Just s -> Just s
+  Nothing -> case isProblem (agri & whoseTurn %~ otherColor) EndTurn of
+    Just s -> Just s
+    Nothing -> if (agri ^. (red . workers) > 0) || (agri ^. (blue . workers) > 0)
+               then Just "some players have unplaced workers"
+               else Nothing
+isProblem _ DoNothing = Nothing
+isProblem agri (PlaceBorder al cx cy) =
+  if  canPlaceBorder agri al cy cx (agri ^. whoseTurn)
+      then Nothing
+      else Just ""
+
+isProblem agri (TakeAnimal cx cy) = if not (hasAnimals agri cx cy)
+                                    then Just "since there are no animals on the tile"
+                                    else Nothing
+
+                                         
+isProblem agri (PlaceAnimal ani cx cy) = if (agri ^. (player col . supply . animals . animalLens ani) == 0)
+                                            then Just "because there is no animal of that type to place"
+                                            else if not (isSameAnimal agri col c ani)
+                                                 then Just "because there is already an animal of another type there"
+                                                 else if (animalSpace agri col c <= 0)
+                                                      then Just "because there is not enough room there"
+                                                      else Nothing
+                                          where col = agri ^. whoseTurn
+                                                c = (cx,cy)
+isProblem agri (FreeAnimal an) =
+  if agri ^. (player col . supply . animals . animalLens an) == 0
+     then Just "you have none in your supply"
+     else Nothing
+  where col = agri ^. whoseTurn
+isProblem agri action | action `elem` workerActions =
+                        if not (hasWorkers agri)
+                        then return "no workers available"
+                        else if not (boardSpaceFree  agri action)
+                             then return "board space occupied"
+                             else if agri ^. hasPlacedWorker
+                                     then return "worker already placed"
+                                     else Nothing
+isProblem agri a = error $ "did not find legal for " ++ show a
 
 
 addAnimal a Nothing      = Just (a,1)
@@ -198,10 +312,6 @@ addAnimal a (Just (b,n)) | a == b = Just (a,n+1)
 addAnimal _ _            = error "Cannot add different animal"
 
 
-isLegalAnimalPlacement :: Agricola -> Coord -> Animal -> Bool
-isLegalAnimalPlacement agri c ani =
-  let col = agri ^. whoseTurn in
-      isSameAnimal agri col c ani && (animalSpace agri col c > 0)
 
 isSameAnimal :: Agricola -> Color -> Coord -> Animal -> Bool
 isSameAnimal agri colr (cx,cy) an =

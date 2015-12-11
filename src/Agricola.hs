@@ -273,6 +273,7 @@ refillBoard board = board &~ do
 startingBoard :: Gameboard
 startingBoard = (refillBoard . takeWorkers)  emptyBoard
 
+data Phase = WorkPhase | BreedingPhase deriving (Show, Eq)
 
 data Agricola = Agricola { _red :: Player
                          , _blue :: Player
@@ -280,21 +281,32 @@ data Agricola = Agricola { _red :: Player
                          , _board :: Gameboard
                          , _starting :: Color
                          , _whoseTurn :: Color
+                         , _hasPlacedWorker :: Bool
+                         , _message :: String
+                         , _phase :: Phase
                          } deriving (Show)
 
 makeLenses ''Agricola
 
-emptyAgricola :: Agricola
-emptyAgricola = Agricola
-                (emptyPlayer Red) (emptyPlayer Blue)
-                emptySupply emptyBoard
-                Blue Blue
 
+emptyAgricola :: Agricola
+emptyAgricola = Agricola {_red = emptyPlayer Red
+                         , _blue = emptyPlayer Blue
+                         , _global = emptySupply
+                         , _board = emptyBoard
+                         , _starting = Red
+                         , _whoseTurn = Red
+                         , _hasPlacedWorker = False
+                         , _message = ""
+                         , _phase = WorkPhase
+                         }
 
 
 data Action = DoNothing
               | PlaceBorder Alignment Integer Integer
+              | FreeAnimal Animal
               | EndTurn
+              | EndPhase
               | TakeResources
               | TakeSmallForest
               | TakeBigForest
@@ -307,7 +319,29 @@ data Action = DoNothing
               | TakeHorsesAndSheep
               | TakeAnimal Integer Integer
               | PlaceAnimal Animal Integer Integer
-            deriving (Eq, Show)
+            deriving (Eq)
+
+
+instance Show Action where
+  show DoNothing = "do nothing"
+  show (PlaceBorder al n m) = case al of
+    V -> "place vertical border on " ++ show n ++ ", " ++ show m
+    H -> "place horizontal border on " ++ show n ++ ", " ++ show m
+  show EndTurn = "end turn"
+  show TakeResources = "take resources"
+  show TakeSmallForest = "take from small forest"
+  show TakeBigForest = "take from big forest"
+  show TakeSmallQuarry = "take from small quarry"
+  show TakeBigQuarry = "take from big quarry"
+  show TakeExpand = "take from expansion"
+  show TakeMillpond = "take from millpond"
+  show TakePigsAndSheep = "take from pigs and sheep"
+  show TakeCowsAndPigs = "take from cows and pigs"
+  show TakeHorsesAndSheep = "take from horses and sheep"
+  show EndPhase = "end phase"
+  show (FreeAnimal a) =  "free a " ++ show a
+  show (TakeAnimal n m) = "take animal from tile " ++ show n ++", " ++ show m
+  show (PlaceAnimal a n m) = "place " ++ show a ++ " on tile " ++ show n ++", " ++ show m
 
 
 instance Show Building where
