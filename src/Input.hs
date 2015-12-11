@@ -38,13 +38,13 @@ getClicked agri coords = do
 -- If these pattern matches fail, the result is nothing (which is what we want)
 clickedBorder :: Agricola -> Coord -> Maybe (Alignment, Integer, Integer)
 clickedBorder agri (mx,my) = do
-  (col, Right (Border a _), (cx,cy)) <- getClicked agri (mx,my)
-  return (a, fromIntegral cx, fromIntegral cy)
+  (col, Right (Border a _), (fx,fy)) <- getClicked agri (mx,my)
+  return (a, fromIntegral fy, fromIntegral fx)
 
 clickedTile :: Agricola -> Coord -> Maybe (Integer, Integer)
 clickedTile agri (mx,my) = do
   (col, Left _, (cx,cy)) <- getClicked agri (mx,my) 
-  return (fromIntegral cx, fromIntegral cy)
+  return (fromIntegral cy, fromIntegral cx)
 
 
 getAnimalTypeFromEvent (EventCharacter 's') = Just Sheep
@@ -70,8 +70,8 @@ dispMsgAtTopAndWaitForInput msg = do
 getAction :: Agricola -> Event -> Curses (Maybe Action)
 getAction agri (EventCharacter 'q')  = return Nothing
 getAction agri (EventCharacter 'Q')  = return Nothing
-getAction agri (EventCharacter ' ') =   return $ Just  EndTurn
-getAction agri (EventCharacter '\n')  =  return $ Just EndPhase
+getAction agri (EventCharacter ' ')  =   return $ Just  EndTurn
+getAction agri (EventCharacter '\n') =  return $ Just EndPhase
 getAction agri (EventCharacter 'f')  =  return $ Just TakeSmallForest
 getAction agri (EventCharacter 'F')  =  return $ Just TakeBigForest
 getAction agri (EventCharacter 's')  =  return $ Just TakeSmallQuarry

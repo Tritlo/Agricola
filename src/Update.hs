@@ -16,9 +16,6 @@ placeBorder agri al n m = agri &~ do
   (player color . supply . borders) -= 1
   (player color . farm . border al n m) .= Border al True
 
-canPlaceBorder :: Agricola -> Alignment -> Integer -> Integer -> Color -> Bool
-canPlaceBorder agri al n m  color = hasBorders agri color
-                                    && freeSpace agri color al n m
 
 hasBorders :: Agricola -> Color -> Bool
 hasBorders agri color = agri ^. (player color . supply . borders) >= 1
@@ -30,13 +27,6 @@ freeSpace agri color al n m = not $ agri ^.
 otherColor :: Color -> Color
 otherColor Red = Blue
 otherColor Blue = Red
-
-tryPlaceBorder :: Agricola -> Alignment -> Integer -> Integer ->  Maybe Agricola
-tryPlaceBorder agri al n m =
-  if
-    canPlaceBorder agri al n m (agri ^. whoseTurn)
-  then return $ placeBorder agri al n m
-  else return agri
 
 addAnimalSupply :: Animals -> Animals -> Animals
 addAnimalSupply (Animals as ap ac ah) (Animals bs bp bc bh) =
@@ -92,7 +82,7 @@ breedAnimal col an agri = agri &~ when (countAnimal agri col an >= 2)
 
 takeAction :: Agricola -> Action -> Agricola
 takeAction agri DoNothing = agri
-takeAction agri (PlaceBorder al cx cy) = placeBorder agri al cy cx
+takeAction agri (PlaceBorder al cx cy) = placeBorder agri al cx cy
 takeAction agri (FreeAnimal an) = agri &~ do
   col <- use whoseTurn
   player col . supply . animals . animalLens an -= 1
@@ -272,10 +262,14 @@ isProblem agri EndPhase =
                then Just "some players have unplaced workers"
                else Nothing
 isProblem _ DoNothing = Nothing
+
 isProblem agri (PlaceBorder al cx cy) =
-  if  canPlaceBorder agri al cy cx (agri ^. whoseTurn)
-      then Nothing
-      else Just ""
+  if hasBorders agri col 
+     then if freeSpace agri col al cx cy
+          then Nothing
+          else Just "because there is already a border there"
+     else Just "because you don't have enough borders"
+  where col = agri ^. whoseTurn
 
 isProblem agri (FreeAnimal an) =
   if agri ^. (player col . supply . animals . animalLens an) == 0
