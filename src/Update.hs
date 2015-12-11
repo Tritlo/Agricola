@@ -188,37 +188,53 @@ addAnimal _ _            = error "Cannot add different animal"
 
 
 isLegalAnimalPlacement :: Agricola -> Coord -> Animal -> Bool
-isLegalAnimalPlacement = undefined
+isLegalAnimalPlacement agri c ani =
+  let col = agri ^. whoseTurn in
+      isSameAnimal agri col c ani && (animalSpace agri col c > 0)
 
-isSameAnimal :: Agricola -> Coord -> Animal -> Bool
-isSameAnimal agri (cx,cy) an =
-  let colr = agri ^. whoseTurn in
-      let tileAn = agri ^. player colr . farm . tile cx cy . tileanimals in
+isSameAnimal :: Agricola -> Color -> Coord -> Animal -> Bool
+isSameAnimal agri colr (cx,cy) an =
+  let tileAn = agri ^. player colr . farm . tile cx cy . tileanimals in
       isNothing tileAn || (fst $ fromJust tileAn) == an
 
-isEnclosed :: Agricola -> Coord -> Bool
-isEnclosed agri c = let col = agri ^. whoseTurn in
-  and [isEnclosed' agri col c d | d <- [N,S,E,W]]
+isEnclosed :: Agricola -> Color -> Coord -> Bool
+isEnclosed agri col c = and [isEnclosed' agri col c d | d <- [N,S,E,W]]
 
 data Direction = N | S | E | W deriving (Eq)
 
 -- TODO : update East to allow extensions
 isEnclosed' :: Agricola -> Color -> Coord -> Direction -> Bool
 isEnclosed' agri col (x,0) N = hasBorder agri col (x,0) N
-isEnclosed' agri col (x,y) N = hasBorder agri col (x,y) N || isEnclosed' agri col (x,y-1) N
+isEnclosed' agri col (x,y) N = hasBorder agri col (x,y) N || isEnclosed' agri col (x,y-1) N || hasBuilding agri col (x,y-1)
 isEnclosed' agri col (x,2) S = hasBorder agri col (x,2) S
-isEnclosed' agri col (x,y) S = hasBorder agri col (x,y) S || isEnclosed' agri col (x,y+1) S
+isEnclosed' agri col (x,y) S = hasBorder agri col (x,y) S || isEnclosed' agri col (x,y+1) S || hasBuilding agri col (x,y+1)
 isEnclosed' agri col (0,y) W = hasBorder agri col (0,y) W
-isEnclosed' agri col (x,y) W = hasBorder agri col (x,y) W || isEnclosed' agri col (x-1,y) W
+isEnclosed' agri col (x,y) W = hasBorder agri col (x,y) W || isEnclosed' agri col (x-1,y) W || hasBuilding agri col (x-1,y)
 isEnclosed' agri col (1,y) E = hasBorder agri col (1,y) E
-isEnclosed' agri col (x,y) E = hasBorder agri col (x,y) E || isEnclosed' agri col (x+1,y) E
+isEnclosed' agri col (x,y) E = hasBorder agri col (x,y) E || isEnclosed' agri col (x+1,y) E || hasBuilding agri col (x+1,y)
 
 hasBorder :: Agricola -> Color -> Coord -> Direction -> Bool
 hasBorder agri col (cx,cy) N = agri ^. player col . farm . border H cy cx . isThere
 hasBorder agri col (cx,cy) S = agri ^. player col . farm . border H (cy+1) cx . isThere
 hasBorder agri col (cx,cy) W = agri ^. player col . farm . border V cy cx . isThere
 hasBorder agri col (cx,cy) E = agri ^. player col . farm . border V cy (cx+1) . isThere
---(player color . farm . border al n m . isThere )
--- enclosed?
--- free space?
--- correct animal type?
+
+hasBuilding :: Agricola -> Color -> Coord -> Bool
+hasBuilding agri col (cx,cy) = isJust (agri ^. player col . farm .tile cx cy . building)
+
+animalCapacity :: Agricola -> Color -> Coord -> Integer
+animalCapacity agri col c | not (isEnclosed agri col c) = hasTrough agri col c
+                          | isEnclosed agri col c = 2^(troughNum agri col c)
+
+animalSpace :: Agricola -> Color -> Coord -> Integer
+animalSpace agri col c@(cx,cy) | isNothing tileAn = animalCapacity agri col c
+                             | otherwise = animalCapacity agri col c - snd (fromJust tileAn)
+    where tileAn = agri ^. player col . farm . tile cx cy . tileanimals
+
+--TODO : Improve this!!
+troughNum :: Agricola -> Color -> Coord -> Integer
+troughNum = hasTrough
+
+hasTrough :: Agricola -> Color -> Coord -> Integer
+hasTrough agri col (cx,cy) | agri ^. player col . farm . tile cx cy . trough = 1
+                           | otherwise = 0
