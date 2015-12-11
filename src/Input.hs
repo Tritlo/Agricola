@@ -47,6 +47,26 @@ clickedTile agri (mx,my) = do
   return (fromIntegral cx, fromIntegral cy)
 
 
+getAnimalTypeFromEvent (EventCharacter 's') = Just Sheep
+getAnimalTypeFromEvent (EventCharacter 'p') = Just Pig
+getAnimalTypeFromEvent (EventCharacter 'c') = Just Cow
+getAnimalTypeFromEvent (EventCharacter 'h') = Just Horse
+getAnimalTypeFromEvent _ = Nothing
+
+
+
+
+dispMsgAtTopAndWaitForInput msg = do
+  (w, _,_,_) <- settings
+  (mx,my) <- getCursor w
+  updateWindow w $ do
+    moveCursor 0 0
+    drawString msg 
+    moveCursor my mx
+  render
+  ev <- waitFor w
+  return ev
+
 getAction :: Agricola -> Event -> Curses (Maybe Action)
 getAction agri (EventCharacter 'q')  = return Nothing
 getAction agri (EventCharacter 'Q')  = return Nothing
@@ -63,33 +83,43 @@ getAction agri (EventCharacter 'c')  =  return $ Just TakeCowsAndPigs
 getAction agri (EventCharacter 'h')  =  return $ Just TakeHorsesAndSheep
 getAction agri (EventCharacter 'r')  =  return $ Just TakeResources
 getAction agri (EventCharacter 'R') = do
-  (w, _,_,_) <- settings
-  (mx,my) <- getCursor w
-  updateWindow w $ do
-    moveCursor 0 0
-    drawString "Choose animal to free (s) sheep, (p) pig, (c) cow or (h) horse"
-    moveCursor my mx
-  render
-  return Nothing
-  ev <- waitFor w
+  ev <- dispMsgAtTopAndWaitForInput $ unwords ["Choose animal to free"
+                                              , "(s) sheep,"
+                                              , "(p) pig,"
+                                              , "(c) cow"
+                                              , "or"
+                                              , "(h) horse"]
+  case getAnimalTypeFromEvent ev of
+    Just a -> return $ Just $ FreeAnimal a
+    Nothing -> return $ Just DoNothing
+getAction agri (EventCharacter 'a') = do
+  ev <- dispMsgAtTopAndWaitForInput $ unwords [ "Choose animal to place"
+                                              , "(s) sheep,"
+                                              , "(p) pig,"
+                                              , "(c) cow"
+                                              , "or"
+                                              , "(h) horse"]
+  let an = getAnimalTypeFromEvent ev
+  case an of
+    Nothing -> return $ Just DoNothing
+    Just a -> do
+      ev <- dispMsgAtTopAndWaitForInput "Choose tile to place on"
+      case ev of
+        m@(EventMouse _ mouseState) -> case clickedTile agri (mx,my) of
+          Nothing -> return $ Just DoNothing
+          Just (x,y) -> return $ Just $ PlaceAnimal a x y
+          where (mx,my,mz) = mouseCoordinates mouseState
+        _ -> return $ Just DoNothing
+getAction agri (EventCharacter 'A') = do
+  ev <- dispMsgAtTopAndWaitForInput "Choose tile to take animal from"
   case ev of
-    EventCharacter 'q' -> return Nothing
-    EventCharacter 'Q' -> return Nothing
-    EventCharacter 's' -> return $ Just $ FreeAnimal Sheep
-    EventCharacter 'p' -> return $ Just $ FreeAnimal Pig
-    EventCharacter 'c' -> return $ Just $ FreeAnimal Cow
-    EventCharacter 'h' -> return $ Just $ FreeAnimal Horse
+    m@(EventMouse _ mouseState) -> case clickedTile agri (mx,my) of
+      Nothing -> return $ Just DoNothing
+      Just (x,y) -> return $ Just $ TakeAnimal x y
+      where (mx,my,mz) = mouseCoordinates mouseState
     _ -> return $ Just DoNothing
 getAction agri (EventCharacter 'b') = do
-  (w, _,_,_) <- settings
-  (mx,my) <- getCursor w
-  updateWindow w $ do
-    moveCursor 0 0
-    drawString "Choose border to place"
-    moveCursor my mx
-  render
-  return Nothing
-  ev <- waitFor w
+  ev <- dispMsgAtTopAndWaitForInput "Choose border to place"
   case ev of
     m@(EventMouse _ mouseState) -> case clickedBorder agri (mx,my) of
       Nothing -> return $ Just DoNothing

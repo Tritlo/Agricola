@@ -32,6 +32,8 @@ drawBoard agri x y= drawLines x y $ lines $ show $ agri ^. board
 instructions :: String
 instructions = "Press (b) to place border." ++ "\n"
                ++ "Press (R) to free an animal.\n"
+               ++ "Press (a) to place an animal on a tile.\n"
+               ++ "Press (A) to take an animal from a tile.\n"
                ++ "Press (r) to " ++ show TakeResources ++ ".\n"
                ++ "Press (f) to " ++ show TakeSmallForest ++ ".\n"
                ++ "Press (F) to " ++ show TakeBigForest ++ ".\n"
