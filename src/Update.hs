@@ -83,7 +83,6 @@ breedAnimal col an agri = agri &~ when (countAnimal agri col an >= 2)
 takeAction :: Agricola -> Action -> Agricola
 takeAction agri DoNothing = agri
 takeAction agri (PlaceBorder al cx cy) = placeBorder agri al cx cy
-takeAction agri (PlaceBorder al cx cy) = placeBorder agri al cy cx
 takeAction agri (PlaceAnimal ani cx cy) = placeAnimal agri (cx,cy) ani
 takeAction agri (FreeAnimal an) = agri &~ do
   col <- use whoseTurn
