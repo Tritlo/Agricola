@@ -31,17 +31,19 @@ drawBoard agri x y= drawLines x y $ lines $ show $ agri ^. board
 
 instructions :: String
 instructions = "Press (b) to place border." ++ "\n"
-               ++ "Press (r) to take resources." ++ "\n"
-               ++ "Press (f) to take small forest." ++ "\n"
-               ++ "Press (F) to take big forest." ++ "\n"
-               ++ "Press (s) to take small quarry." ++ "\n"
-               ++ "Press (S) to take big quarry." ++ "\n"
-               ++ "Press (e) to take expand." ++ "\n"
-               ++ "Press (m) to take millpond." ++ "\n"
-               ++ "Press (p) to take pigs and sheep." ++ "\n"
-               ++ "Press (c) to take cows and pigs." ++ "\n"
-               ++ "Press (h) to take horses and sheep." ++ "\n"
-               ++ "Press (t) to end turn." ++ "\n"
+               ++ "Press (R) to free an animal.\n"
+               ++ "Press (r) to " ++ show TakeResources ++ ".\n"
+               ++ "Press (f) to " ++ show TakeSmallForest ++ ".\n"
+               ++ "Press (F) to " ++ show TakeBigForest ++ ".\n"
+               ++ "Press (s) to " ++ show TakeSmallQuarry ++ ".\n"
+               ++ "Press (S) to " ++ show TakeBigQuarry ++ ".\n"
+               ++ "Press (e) to " ++ show TakeExpand ++ ".\n"
+               ++ "Press (m) to " ++ show TakeMillpond ++ ".\n"
+               ++ "Press (p) to " ++ show TakePigsAndSheep ++ ".\n"
+               ++ "Press (c) to " ++ show TakeCowsAndPigs ++ ".\n"
+               ++ "Press (h) to " ++ show TakeHorsesAndSheep ++ ".\n"
+               ++ "Press (space) to " ++ show EndTurn ++ ".\n"
+               ++ "Press (enter) to " ++ show EndPhase ++ ".\n"
 drawState :: Agricola -> ColorID -> ColorID -> ColorID -> Update ()
 drawState agri colRed colBlue colBoard = do
      clear
@@ -49,7 +51,6 @@ drawState agri colRed colBlue colBoard = do
      drawString "Hello qt3.14!"
      moveCursor 2 2
      drawString "(press q to quit)"
-     drawString $ show $ agri ^. whoseTurn
 
      setColor colRed
      end <- drawFarm agri Red
@@ -67,7 +68,10 @@ drawState agri colRed colBlue colBoard = do
 
      setColor colBoard
      end <- drawBoard agri 20 2
-     drawLines (end + 5) 2 $ lines instructions
+     moveCursor (end + 3) 2
+     drawString $ show (agri ^. whoseTurn) ++ "'s Turn"
+     end <- drawLines (end + 4) 2 $ lines (agri ^. message)
+     drawLines (end + 1) 2 $ lines instructions
      return ()
 
 settings :: Curses (Window, ColorID, ColorID, ColorID)

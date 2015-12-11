@@ -45,7 +45,8 @@ getClickAction agri (mx,my) = case getClicked agri (mx,my) of
 getAction :: Agricola -> Event -> Curses (Maybe Action)
 getAction agri (EventCharacter 'q')  = return Nothing
 getAction agri (EventCharacter 'Q')  = return Nothing
-getAction agri (EventCharacter 't') =   return $ Just  EndTurn
+getAction agri (EventCharacter ' ') =   return $ Just  EndTurn
+getAction agri (EventCharacter '\n')  =  return $ Just EndPhase
 getAction agri (EventCharacter 'f')  =  return $ Just TakeSmallForest
 getAction agri (EventCharacter 'F')  =  return $ Just TakeBigForest
 getAction agri (EventCharacter 's')  =  return $ Just TakeSmallQuarry
@@ -56,6 +57,24 @@ getAction agri (EventCharacter 'p')  =  return $ Just TakePigsAndSheep
 getAction agri (EventCharacter 'c')  =  return $ Just TakeCowsAndPigs
 getAction agri (EventCharacter 'h')  =  return $ Just TakeHorsesAndSheep
 getAction agri (EventCharacter 'r')  =  return $ Just TakeResources
+getAction agri (EventCharacter 'R') = do
+  (w, _,_,_) <- settings
+  (mx,my) <- getCursor w
+  updateWindow w $ do
+    moveCursor 0 0
+    drawString "Choose animal to free (s) sheep, (p) pig, (c) cow or (h) horse"
+    moveCursor my mx
+  render
+  return Nothing
+  ev <- waitFor w
+  case ev of
+    EventCharacter 'q' -> return Nothing
+    EventCharacter 'Q' -> return Nothing
+    EventCharacter 's' -> return $ Just $ FreeAnimal Sheep
+    EventCharacter 'p' -> return $ Just $ FreeAnimal Pig
+    EventCharacter 'c' -> return $ Just $ FreeAnimal Cow
+    EventCharacter 'h' -> return $ Just $ FreeAnimal Horse
+    _ -> return $ Just DoNothing
 getAction agri (EventCharacter 'b') = do
   (w, _,_,_) <- settings
   (mx,my) <- getCursor w
@@ -72,7 +91,7 @@ getAction agri (EventCharacter 'b') = do
     EventCharacter 'q' -> return Nothing
     EventCharacter 'Q' -> return Nothing
     _ -> getAction agri (EventCharacter 'b')
-getAction agri (EventCharacter char) = undefined
+getAction agri (EventCharacter char) = return $ Just DoNothing
 getAction agri (EventSpecialKey key) = undefined
 getAction agri (EventMouse int mouseState) = return $ Just DoNothing
 getAction agri EventResized = return $ Just DoNothing
