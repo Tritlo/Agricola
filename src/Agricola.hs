@@ -305,6 +305,8 @@ data Action = DoNothing
               | TakePigsAndSheep
               | TakeCowsAndPigs
               | TakeHorsesAndSheep
+              | TakeAnimal Integer Integer
+              | PlaceAnimal Animal Integer Integer
             deriving (Eq, Show)
 
 
