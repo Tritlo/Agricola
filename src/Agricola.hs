@@ -12,10 +12,9 @@ import Test.QuickCheck
 import Control.Monad.State
 
 
-
 type Coord = (Integer, Integer)
 
-data Color = Red | Blue deriving (Show)
+data Color = Red | Blue | No deriving (Show, Eq)
 
 data Animals = Animals { _sheep   :: Integer
                        , _pigs    :: Integer
@@ -123,16 +122,17 @@ showHorizBorder hs = "+" ++ intercalate "+" (map show hs) ++ "+"
 
 
 showFarmLine :: [Tile] -> [Border] -> String
-showFarmLine ts bs = init $ unlines strlns
+showFarmLine ts bs = (init . unlines .  map concat . joinLines) lns
   where tlines = map (lines . show) ts
         blines = map (lines . show) bs
         strs (b:bs) (a:as) = [b,a] ++ strs bs as
         strs [a] [] = [a]
         lns = strs blines tlines
-        lss as | any null as = []
-        lss as = map head as : lss (map tail as)
-        strlns = map concat $ lss lns
 
+joinLines :: [[b]] -> [[b]]
+joinLines = lss
+  where lss as | any null as = []
+        lss as = map head as : lss (map tail as)
 
 showFarm :: Farm -> String
 showFarm (Farm (ts:tss) (vs:vss) (hs:hss) ) = showHorizBorder hs ++ "\n"
@@ -157,17 +157,30 @@ emptyPlayer :: Color ->  Player
 emptyPlayer = Player emptyFarm emptySupply 0
 
 
+type UnitBoardTile = Maybe Color
+type MonoBoardTile = Either Color Integer
+type DuoBoardTile = Either Color (Integer, Integer)
+
+
 data Gameboard = Gameboard {
-    _smallForest :: Maybe Integer
-  , _bigForest :: Maybe Integer
-  , _smallQuarry :: Maybe Integer
-  , _bigQuarry :: Maybe Integer
-  , _expand :: Maybe Integer
-  , _millpond :: Maybe (Integer, Integer)
-  , _pigsAndSheep :: Maybe (Integer, Integer)
-  , _cowsAndPigs :: Maybe (Integer, Integer)
-  , _horsesAndSheep :: Maybe (Integer, Integer)
-  , _resources :: Maybe ()
+    _smallForest  :: MonoBoardTile
+  , _bigForest    :: MonoBoardTile
+  , _smallQuarry  :: MonoBoardTile
+  , _bigQuarry    :: MonoBoardTile
+  , _expand       :: MonoBoardTile
+    
+  , _woodFence    :: UnitBoardTile
+  , _stoneWall    :: UnitBoardTile
+  , _resources    :: UnitBoardTile
+  , _buildStall   :: UnitBoardTile
+  , _buildTroughs :: UnitBoardTile
+  , _buildStable   :: UnitBoardTile
+  , _specialBuilding :: UnitBoardTile
+  --, _specialBuilding2 :: UnitBoardTile
+  , _millpond :: DuoBoardTile
+  , _pigsAndSheep :: DuoBoardTile
+  , _cowsAndPigs :: DuoBoardTile
+  , _horsesAndSheep :: DuoBoardTile
                            }
 makeLenses ''Gameboard
 
@@ -177,74 +190,205 @@ append :: MonadState [a] m => [a] -> m ()
 append s = id %= flip (++) s
 
 
+data TileType = Unit
+              | Mono
+              | Duo
+              deriving (Eq, Show)
+
+
+data GameBoardTile =   SmallForest 
+                     | BigForest 
+                     | SmallQuarry 
+                     | BigQuarry 
+                     | Expand 
+                     | WoodFence
+                     | StoneWall
+                     | Resources
+                     | BuildStall
+                     | BuildTroughs
+                     | BuildStable
+                     | SpecialBuilding
+                     | Millpond 
+                     | PigsAndSheep 
+                     | CowsAndPigs 
+                     | HorsesAndSheep
+                     deriving (Eq, Show)
+
+
+resourcesOnTile :: GameBoardTile -> [String]
+resourcesOnTile SmallForest = ["Wood"]
+resourcesOnTile BigForest = ["Wood"]
+resourcesOnTile SmallQuarry = ["Stone"]
+resourcesOnTile BigQuarry = ["Stone"]
+resourcesOnTile Expand = ["Fences"]
+resourcesOnTile WoodFence = []
+resourcesOnTile StoneWall = []
+resourcesOnTile Resources = []
+resourcesOnTile BuildStall = []
+resourcesOnTile BuildTroughs = []
+resourcesOnTile BuildStable = []
+resourcesOnTile SpecialBuilding = []
+resourcesOnTile Millpond = ["Reeds","Sheep"]
+resourcesOnTile PigsAndSheep = ["Pigs","Sheep"]
+resourcesOnTile CowsAndPigs = ["Cows","Pigs"]
+resourcesOnTile HorsesAndSheep = ["Horses","Sheep"]
+
+tileType :: GameBoardTile -> TileType
+tileType SmallForest = Mono
+tileType BigForest = Mono
+tileType SmallQuarry = Mono
+tileType BigQuarry = Mono
+tileType Expand = Mono
+
+tileType WoodFence = Unit
+tileType StoneWall = Unit
+tileType Resources = Unit
+tileType BuildStall = Unit
+tileType BuildTroughs = Unit
+tileType BuildStable = Unit
+tileType SpecialBuilding = Unit
+
+tileType Millpond = Duo
+tileType PigsAndSheep = Duo
+tileType CowsAndPigs = Duo
+tileType HorsesAndSheep = Duo
+
+
+gameBoardLayout :: [[GameBoardTile]]
+gameBoardLayout = [ [SmallForest, BigForest, SmallQuarry, BigQuarry]
+                  , [WoodFence, StoneWall, Resources, Expand]
+                  , [BuildStall, BuildTroughs, Millpond, PigsAndSheep]
+                  , [BuildStable, SpecialBuilding, CowsAndPigs, HorsesAndSheep]
+                  ]
+
+
+
+
+
+monoTileLens
+  :: Functor f =>
+     GameBoardTile
+     -> (MonoBoardTile -> f MonoBoardTile) -> Gameboard -> f Gameboard
+monoTileLens SmallForest = smallForest
+monoTileLens BigForest = bigForest
+monoTileLens SmallQuarry = smallQuarry
+monoTileLens BigQuarry = bigQuarry
+monoTileLens Expand = expand
+
+unitTileLens
+  :: Functor f =>
+     GameBoardTile
+     -> (UnitBoardTile -> f UnitBoardTile) -> Gameboard -> f Gameboard
+unitTileLens WoodFence = woodFence
+unitTileLens StoneWall = stoneWall
+unitTileLens Resources = resources
+unitTileLens BuildStall = buildStall
+unitTileLens BuildTroughs = buildTroughs
+unitTileLens BuildStable = buildStable
+unitTileLens SpecialBuilding = specialBuilding
+
+duoTileLens
+  :: Functor f =>
+     GameBoardTile
+     -> (DuoBoardTile -> f DuoBoardTile) -> Gameboard -> f Gameboard
+duoTileLens Millpond = millpond
+duoTileLens PigsAndSheep = pigsAndSheep
+duoTileLens CowsAndPigs = cowsAndPigs
+duoTileLens HorsesAndSheep = horsesAndSheep
+
+
+instrs :: GameBoardTile -> String
+instrs SmallForest = unlines ["Get Starting marker"] ++ "and take"
+instrs WoodFence = unlines ["","unlimited"] ++ "1 Wood -> Place Fence"
+instrs StoneWall = unlines ["2 x Fence", "also unlimited"] ++ "2 Stone -> Place Fence "
+instrs Resources = unlines ["+1 Wood","+1 Stone"] ++ "+1 Reed"
+instrs Expand = unlines ["Expand your farm"]
+instrs BuildStall = unlines ["3 Stone 1 Reed", "->"] ++ "Stall"
+instrs BuildStable = unlines ["5 Wood or 5 Stone ", "->"] ++ "Stall -> Stables"
+instrs BuildTroughs = unlines ["+1 Trough", "also unlmited"] ++ "3 Wood -> Trough"
+instrs SpecialBuilding = unlines ["","Build a"]++ "special building"
+instrs _ = unlines [""] ++ "Take"
+
+showGameboardTile :: Gameboard -> GameBoardTile -> String
+showGameboardTile board tile =
+  unlines  [show tile ++ ":"
+           , case tileType tile of
+           Unit -> case board ^. unitTileLens tile of
+             Just c -> unlines ["",show c ++ " worker" ]
+             Nothing -> unlines [instrs tile]
+           Mono -> case board ^. monoTileLens tile of
+             Left c -> unlines ["",show c ++ " worker"]
+             Right i ->  unlines [instrs tile] ++ unwords [show i, head reses]
+           Duo -> case board ^. duoTileLens tile of
+             Left c -> unlines ["",show c ++ " worker"]
+             Right (a,b) -> unlines [instrs tile] ++ unwords  [show a , head reses, "and",
+                                      show b ,last reses]
+          ]
+  where reses = resourcesOnTile tile
+  
+
+showBoard board = ers
+  where ers = map (map (showGameboardTile board)) gameBoardLayout
+
+center :: Int -> String -> String
+center max s | even diff = replicate hdiff ' ' ++ s ++ replicate hdiff ' '
+           | odd diff = replicate (hdiff + 1) ' ' ++ s ++ replicate hdiff ' '
+  where diff = max - (length s)
+        hdiff = diff `div` 2
+
+
+gameBoardBorder maxlen num =
+  concat ["+",intercalate "+" $ replicate  num $ replicate maxlen '-', "+","\n"]
+
 instance Show Gameboard where
-  show board = "" &~ do
-    append "Gameboard status: "
-    case _smallForest board of
-      Nothing -> append "Worker on"
-      Just i -> append $ show i ++ " wood and starting token in"
-    append " small forest, "
-    case _bigForest board of
-      Nothing -> append "Worker on"
-      Just i -> append $ show i ++ " wood in"
-    append " big forest, "
-    case _smallQuarry board of
-      Nothing -> append "Worker on"
-      Just i -> append $ show i ++ " stones in"
-    append " small quarry, "
-    case _bigQuarry board of
-      Nothing -> append "Worker on"
-      Just i -> append $ show i ++ " stones in"
-    append " big quarry, "
-    case _expand board of
-      Nothing -> append "Worker on"
-      Just i -> append $ show i ++ " fences for"
-    append " expansion. \n"
-    case _millpond board of
-      Nothing -> append "Worker on"
-      Just (a, b) -> append $ show a ++ " reeds and " ++ show b ++ " sheep in"
-    append " millpond, "
-    case _pigsAndSheep board of
-      Nothing -> append "Worker on"
-      Just (a, b) -> append $ show a ++ " pigs and " ++ show b ++ " sheep in"
-    append " pigs and sheep, "
-    case _cowsAndPigs board of
-      Nothing -> append  "Worker on"
-      Just (a, b) -> append $ show a ++ " cows and " ++ show b ++ " pigs in"
-    append " cows and pigs, "
-    case _horsesAndSheep board of
-      Nothing -> append  "Worker on"
-      Just (a, b) -> append $ show a ++ " horses and " ++ show b ++ " sheep in"
-    append " horses and sheep.\n"
-    case _resources board of
-      Nothing -> append "Worker on"
-      Just _ -> append "No worker on"
-    append " resources."
+  show b = (gameBoardBorder maxlen num) ++
+           (concatMap (++ gameBoardBorder maxlen num)
+            . map (unlines . f . joinLines . map lines)
+            . showBoard)  b
+    where f ls =  (map (((++) "|") . k maxlen) ls)
+          k len = concatMap (++ "|") . map (center len)
+          maxlen  = maximum $ map (maximum . map (maximum . map length) . map lines)  $ showBoard b
+          appendIfShorter len a | length a < len = a ++ replicate  (len - length a) ' ' 
+          appendIfShorter _ a = a
+          num = length $ head gameBoardLayout
+      -- k ls = unwords $ map (mLSPP (maximum (map length ls)) ls)
+      --     mLSPP l st | length st >= l = st
+      --                | otherwise = (replicate diff ' ') ++ st 
+      --       where diff = l - (length st)
+
+
 
 
 
 emptyBoard = Gameboard {
-    _smallForest = Nothing
-  , _bigForest = Nothing
-  , _smallQuarry = Nothing
-  , _bigQuarry = Nothing
-  , _expand = Nothing
-  , _millpond = Nothing
-  , _pigsAndSheep = Nothing
-  , _cowsAndPigs = Nothing
-  , _horsesAndSheep = Nothing
+    _smallForest = Left No
+  , _bigForest = Left No
+  , _smallQuarry = Left No
+  , _bigQuarry = Left No
+  , _expand = Left No
+  , _millpond = Left No
+  , _pigsAndSheep = Left No
+  , _cowsAndPigs = Left No
+  , _horsesAndSheep = Left No
   , _resources = Nothing
+  , _woodFence = Nothing
+  , _stoneWall = Nothing
+  , _buildStall = Nothing
+  , _buildTroughs = Nothing
+  , _buildStable = Nothing
+  , _specialBuilding = Nothing
                        }
 
 
 
-removeWorkerOfSingle :: Maybe Integer -> Maybe Integer
-removeWorkerOfSingle Nothing = Just 0
+removeWorkerOfSingle :: MonoBoardTile -> MonoBoardTile
+removeWorkerOfSingle (Left _) = Right 0
 removeWorkerOfSingle a = a
 
-removeWorkerOfAnimals :: Maybe (Integer, Integer) -> Maybe (Integer, Integer)
-removeWorkerOfAnimals Nothing = Just (0, 0)
+removeWorkerOfAnimals :: DuoBoardTile -> DuoBoardTile
+removeWorkerOfAnimals (Left _) = Right (0, 0)
 removeWorkerOfAnimals a = a
+
 
 takeWorkers :: Gameboard -> Gameboard
 takeWorkers board = board &~ do
@@ -257,12 +401,12 @@ takeWorkers board = board &~ do
   pigsAndSheep    %= removeWorkerOfAnimals
   cowsAndPigs     %= removeWorkerOfAnimals
   horsesAndSheep  %= removeWorkerOfAnimals
-  resources      .= Just ()
+  resources      .= Nothing
 
--- Workers must have been remove prior, i.e. no nothing
-refillAnimals :: Maybe (Integer, Integer) -> Maybe (Integer, Integer)
-refillAnimals (Just (0,0)) = Just (1,0)
-refillAnimals (Just (a,b)) = Just (a,b+1)
+-- Workers must have been remove prior.
+refillAnimals :: DuoBoardTile -> DuoBoardTile
+refillAnimals (Right (0,0)) = Right (1,0)
+refillAnimals (Right (a,b)) = Right (a,b+1)
 
 
 refillBoard :: Gameboard -> Gameboard
@@ -327,6 +471,7 @@ data Action = DoNothing
               | TakeAnimal Integer Integer
               | PlaceAnimal Animal Integer Integer
               | PlaceTrough Integer Integer
+              | SetMessage String
             deriving (Eq)
 
 
@@ -351,23 +496,24 @@ instance Show Action where
   show (TakeAnimal n m) = "take animal from tile " ++ show n ++", " ++ show m
   show (PlaceAnimal a n m) = "place " ++ show a ++ " on tile " ++ show n ++", " ++ show m
   show (PlaceTrough n m) = "place trough on tile " ++ show n ++", " ++ show m
+  show (SetMessage str) = str
 
 
 instance Show Building where
   show Stall = "Stall"
-  show Stable = "Stabl"
-  show FarmHouse = "FarmH"
-  show HalfTimberedHouse = "HTHou"
-  show Storage = "Store"
-  show Shelter = "Shelt"
-  show OpenStable = "OStab"
+  show Stable = "Stable"
+  show FarmHouse = "Farmhouse"
+  show HalfTimberedHouse = "Half Timbered House"
+  show Storage = "Storage"
+  show Shelter = "Shelter"
+  show OpenStable = "Open stable"
 
 
 instance Show Animal where
-  show Sheep = "S"
-  show Pig  = "P"
-  show Cow  = "C"
-  show Horse = "H"
+  show Sheep = "Sheep"
+  show Pig  = "Pig"
+  show Cow  = "Cow"
+  show Horse = "Horse"
 
 fillWithW :: String -> String
 fillWithW s = concat $ replicate tileStrLength s
@@ -390,16 +536,19 @@ instance Show Border where
 
 
 showTro :: Bool -> String
-showTro False = " "
-showTro True = "T"
+showTro False = center lenLongestTileItem ""
+showTro True = center lenLongestTileItem "Trough"
 
 showAn :: Maybe (Animal, Integer) -> String
-showAn Nothing = "0 A"
-showAn (Just (an, count)) = show count ++ " " ++ show an
+showAn Nothing = center lenLongestTileItem "No Animals"
+showAn (Just (an, count)) = center lenLongestTileItem $ show count ++ " " ++ show an
+
+
+lenLongestTileItem = length $ show HalfTimberedHouse
 
 showBu :: Maybe Building -> String
-showBu Nothing = replicate (length $ show Stall) ' '
-showBu (Just bu) = show bu
+showBu Nothing = center lenLongestTileItem ""
+showBu (Just bu) = center lenLongestTileItem $ show bu
 
 minLengthStringPrepend len str | length str >= len = str
 minLengthStringPrepend len str = replicate diff ' ' ++ str
@@ -419,6 +568,7 @@ instance Volume Farm
 instance Volume Building
 instance Volume Border
 
+instance Volume Gameboard
 
 
 
@@ -484,6 +634,39 @@ startingState = emptyAgricola &~ do
 farmOffset :: Color -> Coord
 farmOffset Red = (2,4)
 farmOffset Blue = (60,4)
+
+boardOffset :: Coord
+boardOffset = (2,30)
+
+
+data Button =   StopButton
+              | EndTurnButton
+              | EndPhaseButton
+              | AnimalB Animal
+              | PlaceAnimalButton
+              | TakeAnimalButton
+              | FreeAnimalButton
+              | QuitButton
+              | CancelButton
+              deriving (Eq)
+
+instance Show Button where
+  show StopButton = "Stop"
+  show EndTurnButton = "End turn"
+  show EndPhaseButton = "End phase"
+  show (AnimalB a) = show a
+  show PlaceAnimalButton = "Place animal"
+  show TakeAnimalButton = "Take animal"
+  show FreeAnimalButton = "Free animal"
+  show QuitButton = "Quit"
+  show CancelButton = "Cancel"
+
+defaultControls = [
+  [StopButton, EndTurnButton, EndPhaseButton, PlaceAnimalButton, TakeAnimalButton, FreeAnimalButton]
+  ,[AnimalB Cow, AnimalB Horse, AnimalB Sheep, AnimalB Pig, CancelButton, QuitButton]]
+
+controlsOffset :: Coord
+controlsOffset = (2,23)
 
 farmVolume :: Agricola -> Color -> Measurements
 farmVolume agri col = volume (agri ^. (player col . farm))

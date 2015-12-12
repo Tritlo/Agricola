@@ -112,71 +112,71 @@ takeAction agri EndPhase = agri &~ do
       phase .= BreedingPhase
       whoseTurn .= (agri ^. starting)
       hasPlacedWorker .= True
-      
+
 takeAction agri TakeResources = agri &~ do
   id %= flip takeResources (Supply 0 1 1 1 emptyAnimals)
-  board . resources .= Nothing
+  board . resources .= Just (agri ^. whoseTurn)
   subtractWorker
 
 takeAction agri TakeMillpond = agri &~ do
-  Just (rs,sh) <- use (board . millpond )
+  Right (rs,sh) <- use (board . millpond )
   id %= flip takeResources (emptySupply { _animals = emptyAnimals { _sheep = sh}, _reeds = rs} )
-  board . millpond .= Nothing
+  board . millpond .= Left (agri ^. whoseTurn)
   subtractWorker
 
 takeAction agri TakePigsAndSheep = agri &~ do
-  Just (ps,sh) <- use (board . pigsAndSheep )
+  Right (ps,sh) <- use (board . pigsAndSheep )
   id %= flip takeResources (emptySupply { _animals = emptyAnimals { _sheep = sh, _pigs = ps}})
-  board . pigsAndSheep .= Nothing
+  board . pigsAndSheep .= Left (agri ^. whoseTurn)
   subtractWorker
 
 takeAction agri TakeCowsAndPigs = agri &~ do
-  Just (cs,ps) <- use (board . cowsAndPigs )
+  Right (cs,ps) <- use (board . cowsAndPigs )
   id %= flip takeResources (emptySupply { _animals = emptyAnimals { _cows = cs, _pigs = ps}})
-  board . cowsAndPigs .= Nothing
+  board . cowsAndPigs .= Left (agri ^. whoseTurn)
   subtractWorker
 
 takeAction agri TakeHorsesAndSheep = agri &~ do
-  Just (hs,sh) <- use (board . horsesAndSheep )
+  Right (hs,sh) <- use (board . horsesAndSheep )
   id %= flip takeResources (emptySupply { _animals = emptyAnimals { _sheep = sh, _horses = hs}})
-  board . horsesAndSheep .= Nothing
+  board . horsesAndSheep .= Left (agri ^. whoseTurn)
   subtractWorker
 
 takeAction agri TakeSmallForest = agri &~ do
-  Just w <- use (board . smallForest)
+  Right w <- use (board . smallForest)
   playerColor <- use whoseTurn
   player playerColor . supply . wood += w
   starting .= playerColor
-  board . smallForest .= Nothing
+  board . smallForest .= Left (agri ^. whoseTurn)
   subtractWorker
 
 takeAction agri TakeBigForest = agri &~ do
-  Just w <- use (board . bigForest)
+  Right w <- use (board . bigForest)
   playerColor <- use whoseTurn
   player playerColor . supply . wood += w
-  board . bigForest .= Nothing
+  board . bigForest .= Left (agri ^. whoseTurn)
   subtractWorker
 
 takeAction agri TakeSmallQuarry = agri &~ do
-  Just s <- use (board . smallQuarry)
+  Right s <- use (board . smallQuarry)
   playerColor <- use whoseTurn
   player playerColor . supply . stones += s
   starting .= playerColor
-  board . smallQuarry .= Nothing
+  board . smallQuarry .= Left (agri ^. whoseTurn)
   subtractWorker
 
 takeAction agri TakeBigQuarry = agri &~ do
-  Just s <- use (board . bigQuarry)
+  Right s <- use (board . bigQuarry)
   playerColor <- use whoseTurn
   player playerColor . supply . stones += s
-  board . bigQuarry .= Nothing
+  board . bigQuarry .= Left (agri ^. whoseTurn)
   subtractWorker
 
 takeAction agri TakeExpand = agri &~ do
-  Just b <- use (board . expand)
+  Right b <- use (board . expand)
   playerColor <- use whoseTurn
   player playerColor . supply . borders += b
-  board . expand .= Nothing
+  board . expand .= Left (agri ^. whoseTurn)
   subtractWorker
 
 takeAction agri (TakeAnimal cx cy) = agri &~ do
@@ -224,18 +224,31 @@ hasAnimals :: Agricola -> Integer -> Integer -> Bool
 hasAnimals agri cx cy = let col = agri ^. whoseTurn in
   isJust (agri ^. (player col . farm . tile cx cy . tileanimals))
 
+hasAnimalsInSupply agri =
+     agri ^. player col . supply . animals . animalLens Sheep > 0
+  || agri ^. player col . supply . animals . animalLens Cow > 0
+  || agri ^. player col . supply . animals . animalLens Horse > 0
+  || agri ^. player col . supply . animals . animalLens Pig > 0
+  where col = agri ^. whoseTurn
+
+isRight :: Either a b -> Bool
+isRight (Right _) = True
+isRight (Left _) = False
+
+isLeft :: Either a b -> Bool
+isLeft a = not $ isRight a
 
 boardSpaceFree :: Agricola -> Action -> Bool
-boardSpaceFree agri TakeResources      = isJust (agri ^. board . resources)
-boardSpaceFree agri TakeSmallForest    = isJust (agri ^. board . smallForest)
-boardSpaceFree agri TakeBigForest      = isJust (agri ^. board . bigForest)
-boardSpaceFree agri TakeSmallQuarry    = isJust (agri ^. board . smallQuarry)
-boardSpaceFree agri TakeBigQuarry      = isJust (agri ^. board . bigQuarry)
-boardSpaceFree agri TakeExpand         = isJust (agri ^. board . expand)
-boardSpaceFree agri TakeMillpond       = isJust (agri ^. board . millpond)
-boardSpaceFree agri TakePigsAndSheep   = isJust (agri ^. board . pigsAndSheep)
-boardSpaceFree agri TakeCowsAndPigs    = isJust (agri ^. board . cowsAndPigs)
-boardSpaceFree agri TakeHorsesAndSheep = isJust (agri ^. board . horsesAndSheep)
+boardSpaceFree agri TakeResources      = isNothing (agri ^. board . resources)
+boardSpaceFree agri TakeSmallForest    = isRight (agri ^. board . smallForest)
+boardSpaceFree agri TakeBigForest      = isRight (agri ^. board . bigForest)
+boardSpaceFree agri TakeSmallQuarry    = isRight (agri ^. board . smallQuarry)
+boardSpaceFree agri TakeBigQuarry      = isRight (agri ^. board . bigQuarry)
+boardSpaceFree agri TakeExpand         = isRight (agri ^. board . expand)
+boardSpaceFree agri TakeMillpond       = isRight (agri ^. board . millpond)
+boardSpaceFree agri TakePigsAndSheep   = isRight (agri ^. board . pigsAndSheep)
+boardSpaceFree agri TakeCowsAndPigs    = isRight (agri ^. board . cowsAndPigs)
+boardSpaceFree agri TakeHorsesAndSheep = isRight (agri ^. board . horsesAndSheep)
 
 
 workerActions :: [Action]
@@ -252,9 +265,12 @@ workerActions = [ TakeResources
                 ]
 
 isProblem :: Agricola -> Action ->  Maybe String
+isProblem agri (SetMessage msg) = Just msg
 isProblem agri EndTurn = if hasWorkers agri && not (agri ^. hasPlacedWorker)
                          then Just $ show col ++ " has to place worker"
-                         else Nothing
+                         else if hasAnimalsInSupply agri
+                              then Just $ show col ++ " has unplaced animals, free them or place 'em"
+                              else Nothing
   where col = agri ^. whoseTurn
 isProblem agri EndPhase =
   case isProblem agri EndTurn of
@@ -345,7 +361,6 @@ enclosedWith farm coord = enclosedWith' [] [coord]
                           d <- allDirections,
                           not $ hasBorder farm c d,
                           not $ hasBuilding farm c d]
-                                            
 
 
 isEnclosed :: Agricola -> Coord -> Bool
@@ -361,7 +376,7 @@ isEnclosed agri c = not $ null $ enclosedWith f c
 --   border H 1 1 . isThere .= True
 --   border V 0 0 . isThere .= True
 --   border V 0 2 . isThere .= True
-  
+
 -- testFarm2 = startingFarm &~ do
 --   border H 1 0 . isThere .= True
 --   border V 1 0 . isThere .= True
@@ -378,7 +393,7 @@ hasBuilding :: Farm -> Coord -> Direction -> Bool
 hasBuilding farm c@(cx,cy) d = not (isOutOfBounds (farm ^. tiles) n)
                                && isJust (farm ^. tile nx ny . building)
   where n@(nx,ny) = coordInDirection c d
-        
+
 hasBorder:: Farm -> Coord -> Direction -> Bool
 hasBorder farm (cn,cm) N = farm ^. (border H cn cm . isThere)
 hasBorder farm (cn,cm) S = farm ^. (border H (cn +1) cm. isThere) 
@@ -389,12 +404,10 @@ animalCapacity :: Agricola -> Coord -> Integer
 animalCapacity agri c | not (isEnclosed agri c) = hasTrough agri c
                       | isEnclosed agri c = 2 ^ troughNum agri c
   where col = agri ^. whoseTurn
-      
 
 animalSpace :: Agricola -> Coord -> Integer
 animalSpace agri c@(cx,cy) | isNothing tileAn = animalCapacity agri c
                            | otherwise = animalCapacity agri c - snd (fromJust tileAn)
-                                           
     where
       col = agri ^. whoseTurn
       tileAn = agri ^. player col . farm . tile cx cy . tileanimals
@@ -405,7 +418,6 @@ coordToTile agri c@(cx,cy) = f ^. tile cx cy
   where col = agri ^. whoseTurn
         f = agri ^. (player col . farm)
 
-        
 troughNum :: Agricola -> Coord -> Integer
 troughNum agri coord = toInteger $ length $ filter hast encw
   where col = agri ^. whoseTurn

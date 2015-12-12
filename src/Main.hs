@@ -11,17 +11,12 @@ import UI.NCurses hiding (Color)
 
 
 
+
 gameLoop :: Agricola -> Curses Agricola
 gameLoop agri = do
   (w,_,_,_) <- settings
   renderGame agri
-  event <- waitFor w
-  -- Make sure the cursor ends up where we clicked.
-  case event of
-    EventMouse _ mouseState -> do
-      let (mx,my,mz) =  mouseCoordinates mouseState
-      updateWindow w $ moveCursor my mx
-    _ -> return  ()
+  event <- getNextEvent w
   action <- getAction agri event
   case update agri action of
     Nothing -> return agri
