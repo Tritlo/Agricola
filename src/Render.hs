@@ -48,9 +48,9 @@ instructions = "Press (b) to place border." ++ "\n"
 drawControls :: [[Button]] ->  Update Integer
 drawControls bs = drawLines y x [
   gameBoardBorder maxlen num
-  , "|" ++ (concatMap ((++ "|") . center maxlen . show ) (head bs))
+  , "|" ++ concatMap ((++ "|") . center maxlen . show ) (head bs)
   , gameBoardBorder maxlen num
-  , "|" ++ (concatMap ((++ "|") . center maxlen . show ) (last bs))
+  , "|" ++ concatMap ((++ "|") . center maxlen . show)  (last bs)
   ,gameBoardBorder maxlen num]
   where (x,y) = controlsOffset
         num = maximum $ map length bs
@@ -90,8 +90,12 @@ drawState agri colRed colBlue colBoard = do
      end <- drawControls defaultControls
 
      end <- drawBoard agri
-     moveCursor ((snd $ boardOffset) - 1) (fst $ boardOffset)
-     drawString $ show (agri ^. whoseTurn) ++ "'s Turn"
+     moveCursor (snd boardOffset - 1) (fst boardOffset)
+     drawString $ show (agri ^. phase) ++ ", "
+     drawString $ show (agri ^. whoseTurn) ++ "'s turn. "
+     if agri ^. hasPlacedWorker
+       then drawString "Turn can be ended if no animals remain unaccounted for."
+       else drawString $ show (agri ^. whoseTurn) ++ " has yet to place a worker."
      return ()
 
 settings :: Curses (Window, ColorID, ColorID, ColorID)
@@ -108,15 +112,14 @@ renderGame :: Agricola -> Curses ()
 renderGame agri = do
   (w,colRed, colBlue,colWhite) <- settings
   (my,mx) <- getCursor w
-  scz@(sx,sy) <- screenSize
+  scz@(sy,sx) <- screenSize
   updateWindow w $ do
-    if (sx < 48) || (sy < 92)
+    if (sy < 48) || (sx < 96)
       then do clear
               drawString $ "The current sceen size (" ++ show scz ++ ") is to small!"
               moveCursor 1 0
-              drawString $ "Please make sure that the screen is at least  (48, 92)"
+              drawString "Please make sure that the screen is at least  (48, 96)"
       else drawState agri colRed colBlue colWhite
     setColor colWhite
     moveCursor my mx
   render
-

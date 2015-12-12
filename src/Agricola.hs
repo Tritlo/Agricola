@@ -333,7 +333,7 @@ showBoard board = ers
 center :: Int -> String -> String
 center max s | even diff = replicate hdiff ' ' ++ s ++ replicate hdiff ' '
            | odd diff = replicate (hdiff + 1) ' ' ++ s ++ replicate hdiff ' '
-  where diff = max - (length s)
+  where diff = max - length s
         hdiff = diff `div` 2
 
 
@@ -341,20 +341,15 @@ gameBoardBorder maxlen num =
   concat ["+",intercalate "+" $ replicate  num $ replicate maxlen '-', "+","\n"]
 
 instance Show Gameboard where
-  show b = (gameBoardBorder maxlen num) ++
-           (concatMap (++ gameBoardBorder maxlen num)
-            . map (unlines . f . joinLines . map lines)
+  show b = gameBoardBorder maxlen num ++
+           (concatMap ((++ gameBoardBorder maxlen num) . unlines . f . joinLines . map lines)
             . showBoard)  b
-    where f ls =  (map (((++) "|") . k maxlen) ls)
-          k len = concatMap (++ "|") . map (center len)
-          maxlen  = maximum $ map (maximum . map (maximum . map length) . map lines)  $ showBoard b
+    where f  =  map (( "|" ++) . k maxlen)
+          k len = concatMap ((++ "|") . center len)
+          maxlen  = maximum $ map (maximum . map (maximum . map length . lines))  $ showBoard b
           appendIfShorter len a | length a < len = a ++ replicate  (len - length a) ' ' 
           appendIfShorter _ a = a
           num = length $ head gameBoardLayout
-
-
-
-
 
 emptyBoard = Gameboard {
     _smallForest = Left No
@@ -374,8 +369,6 @@ emptyBoard = Gameboard {
   , _buildStable = Nothing
   , _specialBuilding = Nothing
                        }
-
-
 
 removeWorkerOfSingle :: MonoBoardTile -> MonoBoardTile
 removeWorkerOfSingle (Left _) = Right 0
@@ -420,7 +413,11 @@ refillBoard board = board &~ do
 startingBoard :: Gameboard
 startingBoard = (refillBoard . takeWorkers)  emptyBoard
 
-data Phase = WorkPhase | BreedingPhase deriving (Show, Eq)
+data Phase = WorkPhase | BreedingPhase deriving (Eq)
+
+instance Show Phase where
+  show WorkPhase = "Work phase"
+  show BreedingPhase = "Breeding phase"
 
 data Agricola = Agricola { _red :: Player
                          , _blue :: Player

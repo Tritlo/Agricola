@@ -90,12 +90,12 @@ takeAction agri (PlaceTrough cx cy) = agri &~ do
 takeAction agri (FreeAnimal an) = agri &~ do
   col <- use whoseTurn
   player col . supply . animals . animalLens an -= 1
-  
+
 takeAction agri EndTurn = agri &~ do
   whoseTurn %= otherColor
   curphase <- use phase
   when (curphase == WorkPhase) $ hasPlacedWorker .= False
-      
+
 takeAction agri EndPhase = agri &~ do
   curphase <- use phase
   case curphase of
@@ -183,7 +183,7 @@ takeAction agri (TakeAnimal cx cy) = agri &~ do
   playerColor <- use whoseTurn
   Just (ani,n) <- use (player playerColor . farm . tile cx cy .tileanimals)
   player playerColor . supply . animals . animalLens ani += 1
-  if (n == 1)
+  if n == 1
     then player playerColor . farm . tile cx cy .tileanimals .= Nothing
     else player playerColor . farm . tile cx cy .tileanimals .= Just (ani,n-1)
 
