@@ -86,6 +86,9 @@ takeAction :: Agricola -> Action -> Agricola
 takeAction agri DoNothing = agri
 takeAction agri (PlaceBorder al cx cy) = placeBorder agri al cx cy
 takeAction agri (PlaceAnimal ani cx cy) = placeAnimal agri (cx,cy) ani
+takeAction agri (PlaceTrough cx cy) = agri &~ do
+  col <- use whoseTurn
+  player col . farm . tile cx cy . trough .= True
 takeAction agri (FreeAnimal an) = agri &~ do
   col <- use whoseTurn
   player col . supply . animals . animalLens an -= 1
@@ -292,6 +295,10 @@ isProblem agri (FreeAnimal an) =
      then Just "you have none in your supply"
      else Nothing
   where col = agri ^. whoseTurn
+isProblem agri (PlaceTrough cx cy) = if (agri ^. player col . farm . tile cx cy. trough)
+                                        then Just "because there is already a trough on that tile"
+                                        else Nothing
+                                      where col = agri ^. whoseTurn
 isProblem agri action | action `elem` workerActions =
                         if not (hasWorkers agri)
                         then return "no workers available"
