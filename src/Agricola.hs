@@ -647,7 +647,7 @@ data Button =   StopButton
               | TakeAnimalButton
               | FreeAnimalButton
               | QuitButton
-              | CancelButton
+              | EmptyButton
               deriving (Eq)
 
 instance Show Button where
@@ -659,11 +659,11 @@ instance Show Button where
   show TakeAnimalButton = "Take animal"
   show FreeAnimalButton = "Free animal"
   show QuitButton = "Quit"
-  show CancelButton = "Cancel"
+  show EmptyButton = ""
 
 defaultControls = [
   [StopButton, EndTurnButton, EndPhaseButton, PlaceAnimalButton, TakeAnimalButton, FreeAnimalButton]
-  ,[AnimalB Cow, AnimalB Horse, AnimalB Sheep, AnimalB Pig, CancelButton, QuitButton]]
+  ,[AnimalB Cow, AnimalB Horse, AnimalB Sheep, AnimalB Pig, EmptyButton, QuitButton]]
 
 controlsOffset :: Coord
 controlsOffset = (2,23)

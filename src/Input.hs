@@ -139,22 +139,12 @@ getAction agri (EventCharacter 't')  = do
         _ -> return $ Just DoNothing
 getAction agri (EventCharacter 'r')  =  return $ Just TakeResources
 getAction agri (EventCharacter 'R') = do
-  ev <- dispMsgAtTopAndWaitForInput $ unwords ["Choose animal to free"
-                                              , "(s) sheep,"
-                                              , "(p) pig,"
-                                              , "(c) cow"
-                                              , "or"
-                                              , "(h) horse"]
+  ev <- dispMsgAtTopAndWaitForInput $ unwords ["Choose animal to free"]
   case getAnimalTypeFromEvent ev of
     Just a -> return $ Just $ FreeAnimal a
     Nothing -> return $ Just DoNothing
 getAction agri (EventCharacter 'a') = do
   ev <- dispMsgAtTopAndWaitForInput $ unwords ["Choose animal to place"]
-                                              -- , "(s) sheep,"
-                                              -- , "(p) pig,"
-                                              -- , "(c) cow"
-                                              -- , "or"
-                                              -- , "(h) horse"]
   let an = getAnimalTypeFromEvent ev
   case an of
     Nothing -> return $ Just DoNothing
