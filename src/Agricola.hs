@@ -343,6 +343,7 @@ instance Show Action where
   show (FreeAnimal a) =  "free a " ++ show a
   show (TakeAnimal n m) = "take animal from tile " ++ show n ++", " ++ show m
   show (PlaceAnimal a n m) = "place " ++ show a ++ " on tile " ++ show n ++", " ++ show m
+  show (PlaceTrough n m) = "place trough on tile " ++ show n ++", " ++ show m
 
 
 instance Show Building where

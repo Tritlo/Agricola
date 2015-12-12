@@ -92,14 +92,14 @@ getAction agri (EventCharacter 'm')  =  return $ Just TakeMillpond
 getAction agri (EventCharacter 'p')  =  return $ Just TakePigsAndSheep
 getAction agri (EventCharacter 'c')  =  return $ Just TakeCowsAndPigs
 getAction agri (EventCharacter 'h')  =  return $ Just TakeHorsesAndSheep
--- getAction agri (EventCharacter 't')  = do
---   ev <- dispMsgAtTopAndWaitForInput "Choose tile to place trough on"
---   case ev of 
---         m@(EventMouse _ mouseState) -> case clickedTile agri (mx,my) of
---           Nothing -> return $ Just DoNothing
---           Just (x,y) -> return $ Just $ PlaceTrough x y
---           where (mx,my,mz) = mouseCoordinates mouseState
---         _ -> return $ Just DoNothing
+getAction agri (EventCharacter 't')  = do
+  ev <- dispMsgAtTopAndWaitForInput "Choose tile to place trough on"
+  case ev of
+        m@(EventMouse _ mouseState) -> case clickedTile agri (mx,my) of
+          Nothing -> return $ Just DoNothing
+          Just (x,y) -> return $ Just $ PlaceTrough x y
+          where (mx,my,mz) = mouseCoordinates mouseState
+        _ -> return $ Just DoNothing
         
 getAction agri (EventCharacter 'r')  =  return $ Just TakeResources
 getAction agri (EventCharacter 'R') = do
