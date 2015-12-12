@@ -319,6 +319,7 @@ data Action = DoNothing
               | TakeHorsesAndSheep
               | TakeAnimal Integer Integer
               | PlaceAnimal Animal Integer Integer
+              | PlaceTrough Integer Integer
             deriving (Eq)
 
 
