@@ -282,7 +282,7 @@ isProblem agri (PlaceAnimal ani cx cy) = if (agri ^. (player col . supply . anim
                                             then Just "because there is no animal of that type to place"
                                             else if not (isSameAnimal agri col c ani)
                                                  then Just "because there is already an animal of another type there"
-                                                 else if (animalSpace agri col c <= 0)
+                                                 else if (animalSpace agri c <= 0)
                                                       then Just "because there is not enough room there"
                                                       else Nothing
                                           where col = agri ^. whoseTurn
@@ -326,18 +326,23 @@ allDirections :: [Direction]
 allDirections = [N,S,E,W]
 
 
+isOutOfBounds :: Farm -> Coord -> Bool
+isOutOfBounds farm c@(cn,cm) = cn < 0 || cn >= toInteger (length ts)
+                               || cm < 0 || cm >= toInteger (maximum $ map length ts)
+  where
+    ts = farm ^. tiles
+
 enclosedWith :: Farm -> Coord -> [Coord]
 enclosedWith farm coord = enclosedWith' [] [coord]
   where
-    ts = farm ^. tiles
-    enclosedWith'  _ ((cn,cm):_) | cn < 0
-                     || cn >= toInteger (length ts)
-                     || cm < 0
-                     || cm >= toInteger (maximum $ map length ts)  = []
     enclosedWith' visited []  =  visited
     enclosedWith' visited (v:tovisit)  =
       enclosedWith' (v:visited) $ filter  (`notElem` visited)  (tovisit ++  toVisit v)
-    toVisit c@(cn,cm) = [ coordInDirection c d | d <- allDirections, not $ hasBorder farm c d]
+    toVisit c@(cn,cm) = [ coordInDirection c d | d <- allDirections,
+                          not $ hasBorder farm c d,
+                          not $ isOutOfBounds farm $ coordInDirection c d,
+                          not $ hasBuilding farm $ coordInDirection c d
+                                               ]
                                             
 
 
@@ -369,17 +374,20 @@ hasBorder farm (cn,cm) S = farm ^. border H (cn +1) cm. isThere
 hasBorder farm (cn,cm) W = farm ^. border V cn cm . isThere
 hasBorder farm (cn,cm) E = farm ^. border V cn (cm + 1) . isThere
 
-hasBuilding :: Agricola -> Color -> Coord -> Bool
-hasBuilding agri col (cx,cy) = isJust (agri ^. player col . farm .tile cx cy . building)
+hasBuilding :: Farm -> Coord -> Bool
+hasBuilding farm (cx,cy) = isJust (farm ^. tile cx cy . building)
 
 animalCapacity :: Agricola -> Color -> Coord -> Integer
 animalCapacity agri col c | not (isEnclosed agri c) = hasTrough agri c
                           | isEnclosed agri c = 2 ^ troughNum agri c
 
-animalSpace :: Agricola -> Color -> Coord -> Integer
-animalSpace agri col c@(cx,cy) | isNothing tileAn = animalCapacity agri col c
-                             | otherwise = animalCapacity agri col c - snd (fromJust tileAn)
-    where tileAn = agri ^. player col . farm . tile cx cy . tileanimals
+animalSpace :: Agricola -> Coord -> Integer
+animalSpace agri c@(cx,cy) | isNothing tileAn = animalCapacity agri col c
+                           | otherwise = animalCapacity agri col c - snd (fromJust tileAn)
+                                           
+    where
+      col = agri ^. whoseTurn
+      tileAn = agri ^. player col . farm . tile cx cy . tileanimals
 
 
 coordToTile :: Agricola -> Coord -> Tile
@@ -388,7 +396,6 @@ coordToTile agri c@(cx,cy) = f ^. tile cx cy
         f = agri ^. (player col . farm)
 
         
---TODO : Improve this!!
 troughNum :: Agricola -> Coord -> Integer
 troughNum agri coord = toInteger $ length $ filter hast encw
   where col = agri ^. whoseTurn

@@ -55,10 +55,21 @@ getAnimalTypeFromEvent _ = Nothing
 
 
 
-
+clearFirstLine :: Curses()
+clearFirstLine = do
+  (w, _,_,_) <- settings
+  (mx,my) <- getCursor w
+  updateWindow w $ do
+    moveCursor 0 0
+    drawString (replicate 80 ' ')
+    moveCursor my mx
+  render
+  
+dispMsgAtTopAndWaitForInput :: String -> Curses Event
 dispMsgAtTopAndWaitForInput msg = do
   (w, _,_,_) <- settings
   (mx,my) <- getCursor w
+  clearFirstLine
   updateWindow w $ do
     moveCursor 0 0
     drawString msg 
@@ -81,6 +92,15 @@ getAction agri (EventCharacter 'm')  =  return $ Just TakeMillpond
 getAction agri (EventCharacter 'p')  =  return $ Just TakePigsAndSheep
 getAction agri (EventCharacter 'c')  =  return $ Just TakeCowsAndPigs
 getAction agri (EventCharacter 'h')  =  return $ Just TakeHorsesAndSheep
+-- getAction agri (EventCharacter 't')  = do
+--   ev <- dispMsgAtTopAndWaitForInput "Choose tile to place trough on"
+--   case ev of 
+--         m@(EventMouse _ mouseState) -> case clickedTile agri (mx,my) of
+--           Nothing -> return $ Just DoNothing
+--           Just (x,y) -> return $ Just $ PlaceTrough x y
+--           where (mx,my,mz) = mouseCoordinates mouseState
+--         _ -> return $ Just DoNothing
+        
 getAction agri (EventCharacter 'r')  =  return $ Just TakeResources
 getAction agri (EventCharacter 'R') = do
   ev <- dispMsgAtTopAndWaitForInput $ unwords ["Choose animal to free"
@@ -103,7 +123,7 @@ getAction agri (EventCharacter 'a') = do
   case an of
     Nothing -> return $ Just DoNothing
     Just a -> do
-      ev <- dispMsgAtTopAndWaitForInput "Choose tile to place on"
+      ev <- dispMsgAtTopAndWaitForInput "Choose tile to place on                                         "
       case ev of
         m@(EventMouse _ mouseState) -> case clickedTile agri (mx,my) of
           Nothing -> return $ Just DoNothing
