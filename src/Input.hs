@@ -7,7 +7,7 @@ import Data.Maybe
 import Data.Either
 import Control.Lens
 import Render
-
+import Debug.Trace
 
 
 clickedFarm :: Agricola -> Coord -> Maybe Color
@@ -25,14 +25,19 @@ getClicked agri coords = do
               (x1,y1) .-. (x2,y2) = (x1 - x2, y1 - y2)
   let farmMp = farmMap (agri ^. (player color . farm))
   let fmLs = farmMapLengths farmMp
-  let beforeInLineLengths = takeWhile (<= ox) $ subSeqSum (fmLs !! fromIntegral oy)
-  let ix = length beforeInLineLengths
-  let beforeInLine = take ix (farmMp !! fromIntegral oy)
-  itm <- (farmMp !! fromIntegral oy) !! ix
-  let nx = case itm of
-        (Left _) -> length $ lefts $ catMaybes beforeInLine
-        (Right _) -> length $ rights $ catMaybes beforeInLine
-  return (color,itm,  (fromIntegral nx , fromIntegral oy `div` 2  ))
+  let fmHs = farmMapHeights farmMp
+  let iy = fromIntegral $ getY oy fmHs
+  let ix = fromIntegral $ getX ox fmLs
+  let beforeInLine = take ix (farmMp !!  iy)
+  let beforeInRow = take iy (map (!!  ix) farmMp)
+  itm <- (farmMp !!  iy) !! ix
+  let (nx,ny) = case itm of
+        (Left _)  -> both %~ (toInteger . length . lefts  . catMaybes) $  (beforeInLine,beforeInRow)
+        (Right _) -> both %~ (toInteger . length . rights . catMaybes) $  (beforeInLine,beforeInRow)
+  return (color, itm, (nx, ny))
+  where
+    getX ox ls = toInteger $ length $ takeWhile (<= ox) $ subSeqSum ls
+    getY oy hs = toInteger $ length $ takeWhile (<= oy) $ subSeqSum hs
 
 
 -- If these pattern matches fail, the result is nothing (which is what we want)
@@ -43,7 +48,7 @@ clickedBorder agri (mx,my) = do
 
 clickedTile :: Agricola -> Coord -> Maybe (Integer, Integer)
 clickedTile agri (mx,my) = do
-  (col, Left _, (cx,cy)) <- getClicked agri (mx,my) 
+  (col, Left _, (cx,cy)) <- getClicked agri (mx,my)
   return (fromIntegral cy, fromIntegral cx)
 
 
@@ -64,7 +69,6 @@ clearFirstLine = do
     drawString (replicate 80 ' ')
     moveCursor my mx
   render
-  
 dispMsgAtTopAndWaitForInput :: String -> Curses Event
 dispMsgAtTopAndWaitForInput msg = do
   (w, _,_,_) <- settings
@@ -72,7 +76,7 @@ dispMsgAtTopAndWaitForInput msg = do
   clearFirstLine
   updateWindow w $ do
     moveCursor 0 0
-    drawString msg 
+    drawString msg
     moveCursor my mx
   render
   ev <- waitFor w
@@ -100,7 +104,6 @@ getAction agri (EventCharacter 't')  = do
           Just (x,y) -> return $ Just $ PlaceTrough x y
           where (mx,my,mz) = mouseCoordinates mouseState
         _ -> return $ Just DoNothing
-        
 getAction agri (EventCharacter 'r')  =  return $ Just TakeResources
 getAction agri (EventCharacter 'R') = do
   ev <- dispMsgAtTopAndWaitForInput $ unwords ["Choose animal to free"

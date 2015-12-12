@@ -108,7 +108,7 @@ farmMapTileLine _ _ = error "too many tiles or borders in farmMapTileLine"
 
 class  Show a => Volume a where
   volume :: Show a => a  -> (Integer,Integer)
-  volume v = ( fromIntegral $ maximum . map length . lines $  show v
+  volume v = (fromIntegral $ maximum . map length . lines $  show v
              , fromIntegral $ length  . lines $ show v)
 
 
@@ -121,11 +121,18 @@ emptyFarm = Farm
 showHorizBorder :: [Border] -> String
 showHorizBorder hs = "+" ++ intercalate "+" (map show hs) ++ "+"
 
-showFarmLine :: [Tile] -> [Border] -> String
-showFarmLine (t:ts) (b:bs) = show b ++ show t ++ showFarmLine ts bs
 
-showFarmLine [] [b] = show b
-showFarmLine [] [] = error "too few borders"
+showFarmLine :: [Tile] -> [Border] -> String
+showFarmLine ts bs = init $ unlines strlns
+  where tlines = map (lines . show) ts
+        blines = map (lines . show) bs
+        strs (b:bs) (a:as) = [b,a] ++ strs bs as
+        strs [a] [] = [a]
+        lns = strs blines tlines
+        lss as | any null as = []
+        lss as = map head as : lss (map tail as)
+        strlns = map concat $ lss lns
+
 
 showFarm :: Farm -> String
 showFarm (Farm (ts:tss) (vs:vss) (hs:hss) ) = showHorizBorder hs ++ "\n"
@@ -347,13 +354,13 @@ instance Show Action where
 
 
 instance Show Building where
-  show Stall = "Stl"
-  show Stable = "Stb"
-  show FarmHouse = "FaH"
-  show HalfTimberedHouse = "HTH"
-  show Storage = "Sto"
-  show Shelter = "She"
-  show OpenStable = "OSt"
+  show Stall = "Stall"
+  show Stable = "Stabl"
+  show FarmHouse = "FarmH"
+  show HalfTimberedHouse = "HTHou"
+  show Storage = "Store"
+  show Shelter = "Shelt"
+  show OpenStable = "OStab"
 
 
 instance Show Animal where
@@ -362,14 +369,23 @@ instance Show Animal where
   show Cow  = "C"
   show Horse = "H"
 
-fillWith :: Char -> String
-fillWith = replicate tileStrLength
+fillWithW :: String -> String
+fillWithW s = concat $ replicate tileStrLength s
+
+fillWithH :: String -> String
+fillWithH s = concat $ replicate tileStrHeight s
+
+tileStrLength :: Int
+tileStrLength = maximum $ map length $ lines $ show emptyTile
+
+tileStrHeight :: Int
+tileStrHeight = length $ lines $ show emptyTile
 
 instance Show Border where
-  show (Border V False) = "|"
-  show (Border V True) = "+"
-  show (Border H False) = fillWith '-'
-  show (Border H True) = fillWith '+'
+  show (Border V False) =  fillWithH "|\n"
+  show (Border V True) = fillWithH "+\n"
+  show (Border H False) = fillWithW "-"
+  show (Border H True) = fillWithW "+"
 
 
 
@@ -385,8 +401,17 @@ showBu :: Maybe Building -> String
 showBu Nothing = replicate (length $ show Stall) ' '
 showBu (Just bu) = show bu
 
+minLengthStringPrepend len str | length str >= len = str
+minLengthStringPrepend len str = replicate diff ' ' ++ str
+  where
+    diff = len - length str
+
 instance Show Tile where
-  show (Tile bu an tro) = unwords [showBu bu ,showAn an , showTro tro]
+  show (Tile bu an tro) = items
+    where
+      stuff = [showBu bu ,showAn an , showTro tro]
+      maxl = maximum $ map length stuff
+      items = unlines $ map (minLengthStringPrepend maxl) stuff
 
 
 instance Volume Tile
@@ -395,8 +420,6 @@ instance Volume Building
 instance Volume Border
 
 
-tileStrLength :: Int
-tileStrLength = length $ show emptyTile
 
 
 printFarm :: Farm -> IO()
@@ -496,4 +519,16 @@ farmMapLineLengths (Just (Left t):xs)  =
   fst (volume t): farmMapLineLengths xs
 farmMapLineLengths [] = []
 
-farmMapLengths = map farmMapLineLengths
+
+farmMapLengths  = head .  map farmMapLineLengths
+
+farmMapLineHeights :: [Maybe (Either Tile Border)] -> [Integer]
+farmMapLineHeights (Nothing:xs) = 1 : farmMapLineHeights xs
+farmMapLineHeights (Just (Right b):xs) =
+  snd (volume b): farmMapLineHeights xs
+farmMapLineHeights (Just (Left t):xs)  =
+  snd (volume t): farmMapLineHeights xs
+farmMapLineHeights [] = []
+
+
+farmMapHeights =  map (head .farmMapLineHeights)

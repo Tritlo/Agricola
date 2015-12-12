@@ -16,8 +16,9 @@ drawLines n m (l:ls) = do
     where (n',m') =   (toInteger n, toInteger m)
 
 drawFarm :: Agricola -> Ag.Color -> Update Integer
-drawFarm agri col = drawLines (snd $ farmOffset col) (fst $ farmOffset col) $
-                    lines $ showFarm (agri ^. (player col . farm))
+drawFarm agri col = drawLines oy ox $
+                    lines $ show (agri ^. (player col . farm))
+                    where (ox,oy) = farmOffset col
 
 
 drawSupply :: Agricola -> Ag.Color -> Integer -> Update Integer
@@ -70,7 +71,7 @@ drawState agri colRed colBlue colBoard = do
      drawString $ " has " ++ (show $ agri ^. (player Blue . workers)) ++ " workers."
 
      setColor colBoard
-     end <- drawBoard agri 20 2
+     end <- drawBoard agri 30 2
      moveCursor (end + 3) 2
      drawString $ show (agri ^. whoseTurn) ++ "'s Turn"
      end <- drawLines (end + 4) 2 $ lines (agri ^. message)
