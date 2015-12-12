@@ -199,7 +199,9 @@ getAction agri (EventMouse int mouseState) = do
       Just QuitButton -> return Nothing
       _ -> return $ Just DoNothing
   where (mx,my,_) = mouseCoordinates mouseState
-getAction agri EventResized = return $ Just DoNothing
+getAction agri EventResized = do
+  (sx,sy) <- screenSize
+  return $ Just (SetMessage ("Screen resized to" ++ show (sx,sy)))
 getAction agri (EventUnknown ev) = return $ Just DoNothing
 
 waitFor :: Window -> Curses Event

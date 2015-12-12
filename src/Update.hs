@@ -65,7 +65,6 @@ countAnimalInTiles an ts = sum (map countInRow ts)
 countAnimal :: Agricola -> Color -> Animal -> Integer
 countAnimal agri col animal = countAnimalInTiles animal ts
   where ts = agri ^. (player col . farm . tiles)
-                                 
 
 
 breedAnimals' :: Color -> Agricola -> Agricola
@@ -74,7 +73,7 @@ breedAnimals' col agri = agri &~ do
   id %= breedAnimal col Pig
   id %= breedAnimal col Cow
   id %= breedAnimal col Horse
-  
+
 
 breedAnimal ::  Color -> Animal -> Agricola -> Agricola
 breedAnimal col an agri = agri &~ when (countAnimal agri col an >= 2)
@@ -82,6 +81,7 @@ breedAnimal col an agri = agri &~ when (countAnimal agri col an >= 2)
 
 takeAction :: Agricola -> Action -> Agricola
 takeAction agri DoNothing = agri
+takeAction agri (SetMessage msg) = agri & message .~  msg
 takeAction agri (PlaceBorder al cx cy) = placeBorder agri al cx cy
 takeAction agri (PlaceAnimal ani cx cy) = placeAnimal agri (cx,cy) ani
 takeAction agri (PlaceTrough cx cy) = agri &~ do
@@ -186,12 +186,12 @@ takeAction agri (TakeAnimal cx cy) = agri &~ do
   if (n == 1)
     then player playerColor . farm . tile cx cy .tileanimals .= Nothing
     else player playerColor . farm . tile cx cy .tileanimals .= Just (ani,n-1)
-         
+
 tryTakeAction :: Agricola -> Action -> Maybe Agricola
 tryTakeAction agri action =
   case isProblem agri action of
-  Nothing -> let newagri =  takeAction agri action in
-    return $ newagri & message .~ ""
+  Nothing -> let newagri = agri & message .~ "" in
+    return $ takeAction newagri action
   Just err -> return $ agri & message .~ ("Cannot " ++ show action ++ ", " ++ err)
 
 
@@ -265,7 +265,7 @@ workerActions = [ TakeResources
                 ]
 
 isProblem :: Agricola -> Action ->  Maybe String
-isProblem agri (SetMessage msg) = Just msg
+isProblem agri (SetMessage _) = Nothing
 isProblem agri EndTurn = if hasWorkers agri && not (agri ^. hasPlacedWorker)
                          then Just $ show col ++ " has to place worker"
                          else if hasAnimalsInSupply agri

@@ -45,7 +45,7 @@ instance Show Supply where
                                       ++ show bo ++ " borders "
                                       ++ show wo ++ " wood "
                                       ++ show st ++ " stones "
-                                      ++ show re ++ " reeds. "
+                                      ++ show re ++ " reeds."
                                       ++ "\n" ++ show animals
 
 emptySupply :: Supply
@@ -299,8 +299,8 @@ duoTileLens HorsesAndSheep = horsesAndSheep
 
 instrs :: GameBoardTile -> String
 instrs SmallForest = unlines ["Get Starting marker"] ++ "and take"
-instrs WoodFence = unlines ["","unlimited"] ++ "1 Wood -> Place Fence"
-instrs StoneWall = unlines ["2 x Fence", "also unlimited"] ++ "2 Stone -> Place Fence "
+instrs WoodFence = unlines ["","unlimited"] ++ "1 Wood -> Fence"
+instrs StoneWall = unlines ["2 x Fence", "also unlimited"] ++ "2 Stone -> Fence"
 instrs Resources = unlines ["+1 Wood","+1 Stone"] ++ "+1 Reed"
 instrs Expand = unlines ["Expand your farm"]
 instrs BuildStall = unlines ["3 Stone 1 Reed", "->"] ++ "Stall"
@@ -351,10 +351,6 @@ instance Show Gameboard where
           appendIfShorter len a | length a < len = a ++ replicate  (len - length a) ' ' 
           appendIfShorter _ a = a
           num = length $ head gameBoardLayout
-      -- k ls = unwords $ map (mLSPP (maximum (map length ls)) ls)
-      --     mLSPP l st | length st >= l = st
-      --                | otherwise = (replicate diff ' ') ++ st 
-      --       where diff = l - (length st)
 
 
 
@@ -632,11 +628,11 @@ startingState = emptyAgricola &~ do
 
 
 farmOffset :: Color -> Coord
-farmOffset Red = (2,4)
-farmOffset Blue = (60,4)
+farmOffset Red = (2,1)
+farmOffset Blue = (50,1)
 
 boardOffset :: Coord
-boardOffset = (2,30)
+boardOffset = (2,27)
 
 
 data Button =   StopButton
@@ -666,7 +662,7 @@ defaultControls = [
   ,[AnimalB Cow, AnimalB Horse, AnimalB Sheep, AnimalB Pig, EmptyButton, QuitButton]]
 
 controlsOffset :: Coord
-controlsOffset = (2,23)
+controlsOffset = (2,21)
 
 farmVolume :: Agricola -> Color -> Measurements
 farmVolume agri col = volume (agri ^. (player col . farm))

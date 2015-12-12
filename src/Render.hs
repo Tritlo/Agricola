@@ -68,14 +68,13 @@ drawPlayer agri col = do
        else drawString "."
      return end
 
-     
+
+clearFirstLine = do
+  moveCursor 0 0
+  drawString $ replicate 92 ' '
+
 drawState agri colRed colBlue colBoard = do
      clear
-     moveCursor 1 2
-     drawString "Welcome to Agricola, all creatures big and small!"
-     moveCursor 2 2
-     drawString "(press q to quit)"
-
      setColor colRed
      end <- drawPlayer agri Red
 
@@ -83,14 +82,16 @@ drawState agri colRed colBlue colBoard = do
      end <- drawPlayer agri Blue
 
      setColor colBoard
-     drawLines 0 0 $ lines (agri ^. message)
-
+     if not ( null (agri ^. message))
+       then do drawLines 0 2 $ lines (agri ^. message)
+               return ()
+       else do moveCursor 0 2
+               drawString "Welcome to Agricola, all creatures big and small!"
      end <- drawControls defaultControls
 
      end <- drawBoard agri
      moveCursor ((snd $ boardOffset) - 1) (fst $ boardOffset)
      drawString $ show (agri ^. whoseTurn) ++ "'s Turn"
-     drawLines (end + 1) 2 $ lines instructions
      return ()
 
 settings :: Curses (Window, ColorID, ColorID, ColorID)
@@ -107,8 +108,14 @@ renderGame :: Agricola -> Curses ()
 renderGame agri = do
   (w,colRed, colBlue,colWhite) <- settings
   (my,mx) <- getCursor w
+  scz@(sx,sy) <- screenSize
   updateWindow w $ do
-    drawState agri colRed colBlue colWhite
+    if (sx < 48) || (sy < 92)
+      then do clear
+              drawString $ "The current sceen size (" ++ show scz ++ ") is to small!"
+              moveCursor 1 0
+              drawString $ "Please make sure that the screen is at least  (48, 92)"
+      else drawState agri colRed colBlue colWhite
     setColor colWhite
     moveCursor my mx
   render
