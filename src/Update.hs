@@ -9,6 +9,8 @@ import Control.Lens
 import Control.Monad
 import Control.Monad.State
 import Data.Maybe
+import Data.Map (Map)
+import qualified Data.Map as Map
 
 placeBorder :: Agricola -> Alignment -> Integer -> Integer -> Agricola
 placeBorder agri al n m = agri &~ do
@@ -312,44 +314,89 @@ isSameAnimal agri colr (cx,cy) an =
   let tileAn = agri ^. player colr . farm . tile cx cy . tileanimals in
       isNothing tileAn || (fst $ fromJust tileAn) == an
 
-isEnclosed :: Agricola -> Color -> Coord -> Bool
-isEnclosed agri col c = and [isEnclosed' agri col c d | d <- [N,S,E,W]]
+
+tileCoordToMapCoord :: Coord -> Coord
+tileCoordToMapCoord (n,m) = (n*2 + 1, m*2 + 1)
+
+
 
 data Direction = N | S | E | W deriving (Eq)
 
--- TODO : update East to allow extensions
-isEnclosed' :: Agricola -> Color -> Coord -> Direction -> Bool
-isEnclosed' agri col (x,0) N = hasBorder agri col (x,0) N
-isEnclosed' agri col (x,y) N = hasBorder agri col (x,y) N || isEnclosed' agri col (x,y-1) N || hasBuilding agri col (x,y-1)
-isEnclosed' agri col (x,2) S = hasBorder agri col (x,2) S
-isEnclosed' agri col (x,y) S = hasBorder agri col (x,y) S || isEnclosed' agri col (x,y+1) S || hasBuilding agri col (x,y+1)
-isEnclosed' agri col (0,y) W = hasBorder agri col (0,y) W
-isEnclosed' agri col (x,y) W = hasBorder agri col (x,y) W || isEnclosed' agri col (x-1,y) W || hasBuilding agri col (x-1,y)
-isEnclosed' agri col (1,y) E = hasBorder agri col (1,y) E
-isEnclosed' agri col (x,y) E = hasBorder agri col (x,y) E || isEnclosed' agri col (x+1,y) E || hasBuilding agri col (x+1,y)
+allDirections :: [Direction]
+allDirections = [N,S,E,W]
 
-hasBorder :: Agricola -> Color -> Coord -> Direction -> Bool
-hasBorder agri col (cx,cy) N = agri ^. player col . farm . border H cy cx . isThere
-hasBorder agri col (cx,cy) S = agri ^. player col . farm . border H (cy+1) cx . isThere
-hasBorder agri col (cx,cy) W = agri ^. player col . farm . border V cy cx . isThere
-hasBorder agri col (cx,cy) E = agri ^. player col . farm . border V cy (cx+1) . isThere
+
+enclosedWith :: Farm -> Coord -> [Coord]
+enclosedWith farm coord = enclosedWith' [] [coord]
+  where
+    ts = farm ^. tiles
+    enclosedWith'  _ ((cn,cm):_) | cn < 0
+                     || cn >= toInteger (length ts)
+                     || cm < 0
+                     || cm >= toInteger (maximum $ map length ts)  = []
+    enclosedWith' visited []  =  visited
+    enclosedWith' visited (v:tovisit)  =
+      enclosedWith' (v:visited) $ filter  (`notElem` visited)  (tovisit ++  toVisit v)
+    toVisit c@(cn,cm) = [ coordInDirection c d | d <- allDirections, not $ hasBorder farm c d]
+                                            
+
+
+isEnclosed :: Agricola -> Coord -> Bool
+isEnclosed agri c = not $ null $ enclosedWith f c
+  where col = agri ^. whoseTurn
+        f = agri ^. (player col . farm)
+
+
+testFarm = emptyFarm &~ do
+  border H 0 0 . isThere .= True
+  border H 1 0 . isThere .= True
+  border H 0 1 . isThere .= True
+  border H 1 1 . isThere .= True
+  border V 0 0 . isThere .= True
+  border V 0 2 . isThere .= True
+
+
+coordInDirection :: Coord -> Direction -> Coord
+coordInDirection (cn,cm) N = ( cn - 1, cm)
+coordInDirection (cn,cm) S = ( cn + 1, cm)
+coordInDirection (cn,cm) W = ( cn , cm -1)
+coordInDirection (cn,cm) E = ( cn , cm +1)
+
+
+hasBorder :: Farm -> Coord -> Direction -> Bool
+hasBorder farm (cn,cm) N = farm ^. border H cn cm . isThere
+hasBorder farm (cn,cm) S = farm ^. border H (cn +1) cm. isThere
+hasBorder farm (cn,cm) W = farm ^. border V cn cm . isThere
+hasBorder farm (cn,cm) E = farm ^. border V cn (cm + 1) . isThere
 
 hasBuilding :: Agricola -> Color -> Coord -> Bool
 hasBuilding agri col (cx,cy) = isJust (agri ^. player col . farm .tile cx cy . building)
 
 animalCapacity :: Agricola -> Color -> Coord -> Integer
-animalCapacity agri col c | not (isEnclosed agri col c) = hasTrough agri col c
-                          | isEnclosed agri col c = 2^(troughNum agri col c)
+animalCapacity agri col c | not (isEnclosed agri c) = hasTrough agri c
+                          | isEnclosed agri c = 2 ^ troughNum agri c
 
 animalSpace :: Agricola -> Color -> Coord -> Integer
 animalSpace agri col c@(cx,cy) | isNothing tileAn = animalCapacity agri col c
                              | otherwise = animalCapacity agri col c - snd (fromJust tileAn)
     where tileAn = agri ^. player col . farm . tile cx cy . tileanimals
 
---TODO : Improve this!!
-troughNum :: Agricola -> Color -> Coord -> Integer
-troughNum = hasTrough
 
-hasTrough :: Agricola -> Color -> Coord -> Integer
-hasTrough agri col (cx,cy) | agri ^. player col . farm . tile cx cy . trough = 1
+coordToTile :: Agricola -> Coord -> Tile
+coordToTile agri c@(cx,cy) = f ^. tile cx cy
+  where col = agri ^. whoseTurn
+        f = agri ^. (player col . farm)
+
+        
+--TODO : Improve this!!
+troughNum :: Agricola -> Coord -> Integer
+troughNum agri coord = toInteger $ length $ filter hast encw
+  where col = agri ^. whoseTurn
+        f = agri ^. (player col . farm)
+        encw = enclosedWith f coord
+        hast c@(cx,cy) = f ^. tile cx cy . trough
+
+hasTrough :: Agricola -> Coord -> Integer
+hasTrough agri (cx,cy) | agri ^. player col . farm . tile cx cy . trough = 1
                            | otherwise = 0
+  where col = agri ^. whoseTurn
