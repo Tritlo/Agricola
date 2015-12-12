@@ -419,6 +419,9 @@ _setBorder V n m farm nb@(Border V _) = farm & singular
 border :: Alignment -> Integer -> Integer -> Lens' Farm Border
 border al n m = lens (_border al n m) (_setBorder al n m)
 
+
+
+
 -- Getters and setters for a tile
 _tile :: Integer -> Integer -> Farm -> Tile
 _tile n m farm = farm ^. singular (tiles . element (fromInteger n) . element (fromInteger m))

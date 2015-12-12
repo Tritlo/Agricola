@@ -9,8 +9,6 @@ import Control.Lens
 import Control.Monad
 import Control.Monad.State
 import Data.Maybe
-import Data.Map (Map)
-import qualified Data.Map as Map
 
 placeBorder :: Agricola -> Alignment -> Integer -> Integer -> Agricola
 placeBorder agri al n m = agri &~ do
@@ -322,34 +320,31 @@ isSameAnimal agri colr (cx,cy) an =
       isNothing tileAn || (fst $ fromJust tileAn) == an
 
 
-tileCoordToMapCoord :: Coord -> Coord
-tileCoordToMapCoord (n,m) = (n*2 + 1, m*2 + 1)
-
-
 
 data Direction = N | S | E | W deriving (Eq)
 
 allDirections :: [Direction]
 allDirections = [N,S,E,W]
 
-
-isOutOfBounds :: Farm -> Coord -> Bool
-isOutOfBounds farm c@(cn,cm) = cn < 0 || cn >= toInteger (length ts)
-                               || cm < 0 || cm >= toInteger (maximum $ map length ts)
-  where
-    ts = farm ^. tiles
+isOutOfBounds :: [[a]] -> Coord -> Bool
+isOutOfBounds grid c@(cn,cm) = cn < 0
+                               || cn >= toInteger (length grid)
+                               || cm < 0
+                               || cm >= toInteger (maximum $ map length grid)
 
 enclosedWith :: Farm -> Coord -> [Coord]
 enclosedWith farm coord = enclosedWith' [] [coord]
   where
     enclosedWith' visited []  =  visited
-    enclosedWith' visited (v:tovisit)  =
-      enclosedWith' (v:visited) $ filter  (`notElem` visited)  (tovisit ++  toVisit v)
-    toVisit c@(cn,cm) = [ coordInDirection c d | d <- allDirections,
+    enclosedWith' visited (v:tovisit) | isOutOfBounds (farm ^. tiles) v = []
+    enclosedWith' visited (v:tovisit) =  enclosedWith' (v:visited) $
+                                         filter
+                                           (`notElem` (v:visited))
+                                           (tovisit ++  toVisit v)
+    toVisit c@(cn,cm) = [ coordInDirection c d |
+                          d <- allDirections,
                           not $ hasBorder farm c d,
-                          not $ isOutOfBounds farm $ coordInDirection c d,
-                          not $ hasBuilding farm $ coordInDirection c d
-                                               ]
+                          not $ hasBuilding farm c d]
                                             
 
 
@@ -359,13 +354,18 @@ isEnclosed agri c = not $ null $ enclosedWith f c
         f = agri ^. (player col . farm)
 
 
-testFarm = emptyFarm &~ do
-  border H 0 0 . isThere .= True
-  border H 1 0 . isThere .= True
-  border H 0 1 . isThere .= True
-  border H 1 1 . isThere .= True
-  border V 0 0 . isThere .= True
-  border V 0 2 . isThere .= True
+-- testFarm = emptyFarm &~ do
+--   border H 0 0 . isThere .= True
+--   border H 1 0 . isThere .= True
+--   border H 0 1 . isThere .= True
+--   border H 1 1 . isThere .= True
+--   border V 0 0 . isThere .= True
+--   border V 0 2 . isThere .= True
+  
+-- testFarm2 = startingFarm &~ do
+--   border H 1 0 . isThere .= True
+--   border V 1 0 . isThere .= True
+--   border V 1 1 . isThere .= True
 
 
 coordInDirection :: Coord -> Direction -> Coord
@@ -374,23 +374,26 @@ coordInDirection (cn,cm) S = ( cn + 1, cm)
 coordInDirection (cn,cm) W = ( cn , cm -1)
 coordInDirection (cn,cm) E = ( cn , cm +1)
 
+hasBuilding :: Farm -> Coord -> Direction -> Bool
+hasBuilding farm c@(cx,cy) d = not (isOutOfBounds (farm ^. tiles) n)
+                               && isJust (farm ^. tile nx ny . building)
+  where n@(nx,ny) = coordInDirection c d
+        
+hasBorder:: Farm -> Coord -> Direction -> Bool
+hasBorder farm (cn,cm) N = farm ^. (border H cn cm . isThere)
+hasBorder farm (cn,cm) S = farm ^. (border H (cn +1) cm. isThere) 
+hasBorder farm (cn,cm) W = farm ^. (border V cn cm . isThere)
+hasBorder farm (cn,cm) E = farm ^. (border V cn (cm + 1) . isThere)
 
-hasBorder :: Farm -> Coord -> Direction -> Bool
-hasBorder farm (cn,cm) N = farm ^. border H cn cm . isThere
-hasBorder farm (cn,cm) S = farm ^. border H (cn +1) cm. isThere
-hasBorder farm (cn,cm) W = farm ^. border V cn cm . isThere
-hasBorder farm (cn,cm) E = farm ^. border V cn (cm + 1) . isThere
-
-hasBuilding :: Farm -> Coord -> Bool
-hasBuilding farm (cx,cy) = isJust (farm ^. tile cx cy . building)
-
-animalCapacity :: Agricola -> Color -> Coord -> Integer
-animalCapacity agri col c | not (isEnclosed agri c) = hasTrough agri c
-                          | isEnclosed agri c = 2 ^ troughNum agri c
+animalCapacity :: Agricola -> Coord -> Integer
+animalCapacity agri c | not (isEnclosed agri c) = hasTrough agri c
+                      | isEnclosed agri c = 2 ^ troughNum agri c
+  where col = agri ^. whoseTurn
+      
 
 animalSpace :: Agricola -> Coord -> Integer
-animalSpace agri c@(cx,cy) | isNothing tileAn = animalCapacity agri col c
-                           | otherwise = animalCapacity agri col c - snd (fromJust tileAn)
+animalSpace agri c@(cx,cy) | isNothing tileAn = animalCapacity agri c
+                           | otherwise = animalCapacity agri c - snd (fromJust tileAn)
                                            
     where
       col = agri ^. whoseTurn
