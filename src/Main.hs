@@ -17,7 +17,7 @@ gameLoop agri = do
   (w,_,_,_) <- settings
   renderGame agri
   event <- getNextEvent w
-  action <- getAction agri event
+  action <- getAction event agri
   case update agri action of
     Nothing -> return agri
     Just agri -> gameLoop agri

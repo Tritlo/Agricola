@@ -57,7 +57,7 @@ data Building = Stall | Stable | FarmHouse |
 
 data Animal = Sheep | Pig | Cow | Horse deriving ( Eq)
 
-data Good = Wood | Stone | Reed deriving (Show)
+data Good = Wood | Stone | Reed deriving (Eq, Show)
 
 data Alignment = H | V deriving (Eq, Show)
 data Border = Border {  _alignment ::  Alignment
@@ -464,7 +464,9 @@ data Action = DoNothing
               | TakeAnimal Integer Integer
               | PlaceAnimal Animal Integer Integer
               | PlaceTrough Integer Integer
+              | SpendResources Good Integer
               | SetMessage String
+              | MultiAction [Action]
             deriving (Eq)
 
 
@@ -489,6 +491,7 @@ instance Show Action where
   show (TakeAnimal n m) = "take animal from tile " ++ show n ++", " ++ show m
   show (PlaceAnimal a n m) = "place " ++ show a ++ " on tile " ++ show n ++", " ++ show m
   show (PlaceTrough n m) = "place trough on tile " ++ show n ++", " ++ show m
+  show (SpendResources good n) = "spend " ++ show n ++ " of your " ++ show good
   show (SetMessage str) = str
 
 

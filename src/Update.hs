@@ -84,6 +84,9 @@ takeAction agri DoNothing = agri
 takeAction agri (SetMessage msg) = agri & message .~  msg
 takeAction agri (PlaceBorder al cx cy) = placeBorder agri al cx cy
 takeAction agri (PlaceAnimal ani cx cy) = placeAnimal agri (cx,cy) ani
+takeAction agri (SpendResources good n) = agri &~ do
+  col <- use whoseTurn
+  player col . supply . goodLens good -= n
 takeAction agri (PlaceTrough cx cy) = agri &~ do
   col <- use whoseTurn
   player col . farm . tile cx cy . trough .= True
@@ -193,15 +196,47 @@ tryTakeAction agri action =
   Nothing -> let newagri = agri & message .~ "" in
     return $ takeAction newagri action
   Just err -> return $ agri & message .~ ("Cannot " ++ show action ++ ", " ++ err)
-
-
-
-
+{-
+tryTakeMultiAction :: Agricola -> [Action] -> Agricola
+tryTakeMultiAction agri [] = agri
+tryTakeMultiAction agri (a:as) = case isProblem agri a of
+  Nothing -> let newagri = agri & message .~ "" in
+    tryTakeMultiAction (takeAction newagri a) as
+  Just err -> agri & message .~ ("Cannot " ++ show a ++ ", " ++ err)
+-}
+tryTakeActionPair :: Agricola -> Action -> Action -> Maybe Agricola
+tryTakeActionPair agri a b = case isProblem agri a of
+  Just erra -> return $ agri & message .~ ("Cannot " ++ show a ++ ", " ++ erra)
+  Nothing -> case isProblem agri b of
+    Just errb -> return $ agri & message .~ ("Cannot " ++ show b ++ ", " ++ errb)
+    Nothing -> let newagri = agri & message .~ "" in
+      let newagrib = (takeAction newagri a) & message .~ "" in
+      return $ takeAction newagrib b
+{-  
+tryBuildTroughs :: Agricola -> Agricola
+tryBuildTroughs agri = undefined
+  if not (hasWorkers agri)
+  then return $ agri & message .~ "No workers available"
+  else if not (isNothing (agri ^. board . buildTroughs))
+       then return $ agri & message .~ "board space occupied"
+       else if agri ^. hasPlacedWorker
+            then return $ agri & message .~ "Worker already placed"
+            else return agri &~ do
+                board . buildTroughs .= Just (agri ^. whoseTurn)
+                subtractWorker
+placeTroughInteraction
+tryTakeActionPair (SpendResources Wood 3) (PlaceTrough)
+-}
 update :: Agricola -> Maybe Action -> Maybe Agricola
 update agri action = do
   act <- action
   agri <- tryTakeAction agri act
   return agri
+
+goodLens :: Functor f => Good -> (Integer -> f Integer) -> Supply -> f Supply
+goodLens Wood = wood
+goodLens Stone = stones
+goodLens Reed = reeds
 
 animalLens :: Functor f => Animal -> (Integer -> f Integer) -> Animals -> f Animals
 animalLens Sheep = sheep
@@ -307,6 +342,11 @@ isProblem agri (PlaceAnimal ani cx cy) = if (agri ^. (player col . supply . anim
 isProblem agri (FreeAnimal an) =
   if agri ^. (player col . supply . animals . animalLens an) == 0
      then Just "you have none in your supply"
+     else Nothing
+  where col = agri ^. whoseTurn
+isProblem agri (SpendResources good n) =
+  if agri ^. (player col . supply . goodLens good) < n
+     then Just ("you do not have enough" ++ show good ++ " in your supply")
      else Nothing
   where col = agri ^. whoseTurn
 isProblem agri (PlaceTrough cx cy) = if (agri ^. player col . farm . tile cx cy. trough)
@@ -427,5 +467,5 @@ troughNum agri coord = toInteger $ length $ filter hast encw
 
 hasTrough :: Agricola -> Coord -> Integer
 hasTrough agri (cx,cy) | agri ^. player col . farm . tile cx cy . trough = 1
-                           | otherwise = 0
+                       | otherwise = 0
   where col = agri ^. whoseTurn

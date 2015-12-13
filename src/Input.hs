@@ -114,22 +114,8 @@ dispMsgAtTopAndWaitForInput msg = do
 
 
 
-
-getAction :: Agricola -> Event -> Curses (Maybe Action)
-getAction agri (EventCharacter 'q')  = return Nothing
-getAction agri (EventCharacter 'Q')  = return Nothing
-getAction agri (EventCharacter ' ')  = return $ Just  EndTurn
-getAction agri (EventCharacter '\n') = return $ Just EndPhase
-getAction agri (EventCharacter 'f')  = return $ Just TakeSmallForest
-getAction agri (EventCharacter 'F')  = return $ Just TakeBigForest
-getAction agri (EventCharacter 's')  = return $ Just TakeSmallQuarry
-getAction agri (EventCharacter 'S')  = return $ Just TakeBigQuarry
-getAction agri (EventCharacter 'e')  = return $ Just TakeExpand
-getAction agri (EventCharacter 'm')  = return $ Just TakeMillpond
-getAction agri (EventCharacter 'p')  = return $ Just TakePigsAndSheep
-getAction agri (EventCharacter 'c')  = return $ Just TakeCowsAndPigs
-getAction agri (EventCharacter 'h')  = return $ Just TakeHorsesAndSheep
-getAction agri (EventCharacter 't')  = do
+placeTroughInteraction :: Agricola -> Curses (Maybe Action)
+placeTroughInteraction agri = do
   ev <- dispMsgAtTopAndWaitForInput "Choose tile to place trough on"
   case ev of
         m@(EventMouse _ mouseState) -> case clickedTile agri (mx,my) of
@@ -137,13 +123,32 @@ getAction agri (EventCharacter 't')  = do
           Just (x,y) -> return $ Just $ PlaceTrough x y
           where (mx,my,mz) = mouseCoordinates mouseState
         _ -> return $ Just DoNothing
-getAction agri (EventCharacter 'r')  =  return $ Just TakeResources
-getAction agri (EventCharacter 'R') = do
-  ev <- dispMsgAtTopAndWaitForInput $ unwords ["Choose animal to free"]
-  case getAnimalTypeFromEvent ev of
-    Just a -> return $ Just $ FreeAnimal a
-    Nothing -> return $ Just DoNothing
-getAction agri (EventCharacter 'a') = do
+
+placeBorderInteraction :: Agricola -> Curses (Maybe Action)
+placeBorderInteraction agri = do
+  ev <- dispMsgAtTopAndWaitForInput "Choose border to place"
+  case ev of
+    m@(EventMouse _ mouseState) -> case clickedBorder agri (mx,my) of
+      Nothing -> return $ Just DoNothing
+      Just (a, x,y) -> return $ Just $ PlaceBorder a x y
+      where (mx,my,mz) = mouseCoordinates mouseState
+    EventCharacter 'q' -> return Nothing
+    EventCharacter 'Q' -> return Nothing
+    _ -> placeBorderInteraction agri
+
+
+takeAnimalInteraction :: Agricola -> Curses (Maybe Action)
+takeAnimalInteraction agri = do
+  ev <- dispMsgAtTopAndWaitForInput "Choose tile to take animal from"
+  case ev of
+    m@(EventMouse _ mouseState) -> case clickedTile agri (mx,my) of
+      Nothing -> return $ Just DoNothing
+      Just (x,y) -> return $ Just $ TakeAnimal x y
+      where (mx,my,mz) = mouseCoordinates mouseState
+    _ -> return $ Just DoNothing
+
+placeAnimalInteraction :: Agricola -> Curses (Maybe Action)
+placeAnimalInteraction agri = do
   ev <- dispMsgAtTopAndWaitForInput $ unwords ["Choose animal to place"]
   let an = getAnimalTypeFromEvent ev
   case an of
@@ -156,27 +161,38 @@ getAction agri (EventCharacter 'a') = do
           Just (x,y) -> return $ Just $ PlaceAnimal a x y
           where (mx,my,mz) = mouseCoordinates mouseState
         _ -> return $ Just DoNothing
-getAction agri (EventCharacter 'A') = do
-  ev <- dispMsgAtTopAndWaitForInput "Choose tile to take animal from"
-  case ev of
-    m@(EventMouse _ mouseState) -> case clickedTile agri (mx,my) of
-      Nothing -> return $ Just DoNothing
-      Just (x,y) -> return $ Just $ TakeAnimal x y
-      where (mx,my,mz) = mouseCoordinates mouseState
-    _ -> return $ Just DoNothing
-getAction agri (EventCharacter 'b') = do
-  ev <- dispMsgAtTopAndWaitForInput "Choose border to place"
-  case ev of
-    m@(EventMouse _ mouseState) -> case clickedBorder agri (mx,my) of
-      Nothing -> return $ Just DoNothing
-      Just (a, x,y) -> return $ Just $ PlaceBorder a x y
-      where (mx,my,mz) = mouseCoordinates mouseState
-    EventCharacter 'q' -> return Nothing
-    EventCharacter 'Q' -> return Nothing
-    _ -> getAction agri (EventCharacter 'b')
-getAction agri (EventCharacter char) = return $ Just DoNothing
-getAction agri (EventSpecialKey key) = undefined
-getAction agri (EventMouse int mouseState) = do
+
+
+freeAnimalInteraction :: Curses (Maybe Action)
+freeAnimalInteraction = do
+  ev <- dispMsgAtTopAndWaitForInput $ unwords ["Choose animal to free"]
+  case getAnimalTypeFromEvent ev of
+    Just a -> return $ Just $ FreeAnimal a
+    Nothing -> return $ Just DoNothing
+
+getAction :: Event -> Agricola -> Curses (Maybe Action)
+getAction (EventCharacter 'q')   = const $ return Nothing
+getAction (EventCharacter 'Q')   = const $ return Nothing
+getAction (EventCharacter ' ')   = const $ return $ Just  EndTurn
+getAction (EventCharacter '\n')  = const $ return $ Just EndPhase
+getAction (EventCharacter 'f')   = const $ return $ Just TakeSmallForest
+getAction (EventCharacter 'F')   = const $ return $ Just TakeBigForest
+getAction (EventCharacter 's')   = const $ return $ Just TakeSmallQuarry
+getAction (EventCharacter 'S')   = const $ return $ Just TakeBigQuarry
+getAction (EventCharacter 'e')   = const $ return $ Just TakeExpand
+getAction (EventCharacter 'm')   = const $ return $ Just TakeMillpond
+getAction (EventCharacter 'p')   = const $ return $ Just TakePigsAndSheep
+getAction (EventCharacter 'c')   = const $ return $ Just TakeCowsAndPigs
+getAction (EventCharacter 'h')   = const $ return $ Just TakeHorsesAndSheep
+getAction (EventCharacter 't')   = placeTroughInteraction
+getAction (EventCharacter 'r')   = const $ return $ Just TakeResources
+getAction (EventCharacter 'R')   = const freeAnimalInteraction
+getAction (EventCharacter 'a')   = placeAnimalInteraction
+getAction (EventCharacter 'A')   = takeAnimalInteraction
+getAction (EventCharacter 'b')   = placeBorderInteraction
+getAction (EventCharacter char)  = const $ return $ Just DoNothing
+getAction (EventSpecialKey key)  = const undefined
+getAction (EventMouse int mouseState) = \agri -> do
   case clickedBoard agri (mx,my) of
     Just SmallForest -> return $ Just TakeSmallForest
     Just BigForest -> return $ Just TakeBigForest
@@ -193,16 +209,16 @@ getAction agri (EventMouse int mouseState) = do
       Just StopButton -> return $ Just DoNothing
       Just EndTurnButton -> return $ Just EndTurn
       Just EndPhaseButton -> return $ Just EndPhase
-      Just PlaceAnimalButton -> getAction agri (EventCharacter 'a')
-      Just TakeAnimalButton -> getAction agri (EventCharacter 'A')
-      Just FreeAnimalButton -> getAction agri (EventCharacter 'R')
+      Just PlaceAnimalButton -> placeAnimalInteraction agri
+      Just TakeAnimalButton -> takeAnimalInteraction agri
+      Just FreeAnimalButton -> freeAnimalInteraction
       Just QuitButton -> return Nothing
       _ -> return $ Just DoNothing
   where (mx,my,_) = mouseCoordinates mouseState
-getAction agri EventResized = do
+getAction EventResized = const $ do
   (sx,sy) <- screenSize
   return $ Just (SetMessage ("Screen resized to" ++ show (sx,sy)))
-getAction agri (EventUnknown ev) = return $ Just DoNothing
+getAction (EventUnknown ev) = const $ return $ Just DoNothing
 
 waitFor :: Window -> Curses Event
 waitFor w = loop where
