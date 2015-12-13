@@ -402,7 +402,7 @@ hasBorder farm (cn,cm) E = farm ^. (border V cn (cm + 1) . isThere)
 
 animalCapacity :: Agricola -> Coord -> Integer
 animalCapacity agri c | not (isEnclosed agri c) = hasTrough agri c
-                      | isEnclosed agri c = 2 ^ troughNum agri c
+                      | isEnclosed agri c = 2 ^ (1 + troughNum agri c)
   where col = agri ^. whoseTurn
 
 animalSpace :: Agricola -> Coord -> Integer
