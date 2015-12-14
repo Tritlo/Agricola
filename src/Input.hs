@@ -263,33 +263,18 @@ stoneWallInteraction =
     secondmsg = "Click on border to place, stop to finish or cancel to cancel." 
     latermsg = "Click on border to place for 2 stones, stop to finish or cancel to cancel."
 
+
+
 woodFenceInteraction :: Agricola -> Curses (Maybe Action)
---woodFenceInteraction =
---  multiActionInteraction
---  (repeat)
-woodFenceInteraction agri = woodFenceInteraction' agri [] latermsg
+woodFenceInteraction =
+  multiActionInteraction
+  (firstmsg : repeat latermsg)
+  (repeat cost)
+  placeBorderInteraction
   where
+    cost = (SpendResources Wood 1)
     firstmsg = "Click on border to place for 1 wood, or click stop to cancel"
     latermsg = "Click on border to place for 1 wood, stop to finish or cancel to cancel."
-    woodFenceInteraction' agri [] _ = do
-      case isProblem agri StartBuildingWoodFences of
-        Nothing -> woodFenceInteraction' agri [StartBuildingWoodFences] latermsg
-        Just err -> return $ Just (SetMessage $ "Cannot build borders, since " ++ err)
-    woodFenceInteraction' agri sofar msg = do
-      renderGame agri
-      action <- placeBorderInteraction msg agri
-      case action of
-        Nothing -> return $ Just DoNothing
-        Just DoNothing -> return $ Just (MultiAction sofar)
-        Just pb@(PlaceBorder a x y) -> do
-          let newitems = [SpendResources Wood 1, pb]
-          case tryTakeMultiAction agri newitems of
-            Left na -> woodFenceInteraction' na (sofar ++ newitems) latermsg
-            Right err ->
-              woodFenceInteraction' agri sofar $
-              unlines [latermsg, "Cannot "
-                                ++ unwords (map show newitems)
-                                ++ " since " ++ err ++ ", try again. " ]
 
 mouseClick :: Coord -> Agricola -> Curses (Maybe Action)
 mouseClick (mx,my) agri = do
