@@ -265,8 +265,6 @@ stoneWallInteraction =
     secondmsg = "Click on border to place, stop to finish or cancel to cancel." 
     latermsg = "Click on border to place for 2 stones, stop to finish or cancel to cancel."
 
-
-
 woodFenceInteraction :: Agricola -> Curses (Maybe Action)
 woodFenceInteraction =
   multiActionInteraction
@@ -277,6 +275,9 @@ woodFenceInteraction =
     cost = (SpendResources Wood 1)
     firstmsg = "Click on border to place for 1 wood, or click stop to cancel"
     latermsg = "Click on border to place for 1 wood, stop to finish or cancel to cancel."
+
+buildStallInteraction :: Agricola -> Curses (Maybe Action)
+buildStallInteraction = undefined
 
 mouseClick :: Coord -> Agricola -> Curses (Maybe Action)
 mouseClick (mx,my) agri = do

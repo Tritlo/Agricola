@@ -86,6 +86,11 @@ takeAction StartBuildingWoodFences = flip (&~) $ do
   col <- use whoseTurn
   id %= takeUnitTile WoodFence
   player col . supply . goodLens Wood -= 1
+takeAction StartBuildingStall = flip (&~) $ do
+  col <- use whoseTurn
+  id %= takeUnitTile BuildStall
+  player col . supply . goodLens Stone -= 3
+  player col . supply . goodLens Reed -= 1
 takeAction DoNothing = id
 takeAction (SetMessage msg) = set message msg
 takeAction (PlaceBorder al cx cy) = placeBorder al cx cy
@@ -97,6 +102,9 @@ takeAction (SpendResources good n) = flip (&~) $ do
 takeAction (PlaceTrough cx cy) = flip (&~) $ do
   col <- use whoseTurn
   player col . farm . tile cx cy . trough .= True
+takeAction (PlaceStall cx cy) = flip (&~) $ do
+  col <- use whoseTurn
+  player col . farm . tile cx cy . building .= Just Stall
 takeAction (FreeAnimal an) = flip (&~) $ do
   col <- use whoseTurn
   player col . supply . animals . animalLens an -= 1
@@ -246,6 +254,8 @@ boardSpaceFree agri TakeHorsesAndSheep = isRight (agri ^. board . horsesAndSheep
 boardSpaceFree agri StartBuildingTroughs = isNothing (agri ^. board . buildTroughs)
 boardSpaceFree agri StartBuildingStoneWalls = isNothing (agri ^. board . stoneWall)
 boardSpaceFree agri StartBuildingWoodFences = isNothing (agri ^. board . woodFence)
+boardSpaceFree agri StartBuildingStall = isNothing (agri ^. board . buildStall)
+
 
 workerActions :: [Action]
 workerActions = [ TakeResources
@@ -261,6 +271,7 @@ workerActions = [ TakeResources
                 , StartBuildingTroughs
                 , StartBuildingStoneWalls
                 , StartBuildingWoodFences
+                , StartBuildingStall
                 ]
 
 isProblem :: Agricola -> Action ->  Maybe String
@@ -316,6 +327,10 @@ isProblem agri (PlaceTrough cx cy) = if (agri ^. player col . farm . tile cx cy.
                                         then Just "because there is already a trough on that tile"
                                         else Nothing
                                       where col = agri ^. whoseTurn
+isProblem agri (PlaceStall cx cy) = if (isJust (agri ^. player col . farm . tile cx cy. building))
+                                        then Just "because there is already a building on that tile"
+                                        else Nothing
+                                      where col = agri ^. whoseTurn
 isProblem agri action | action `elem` workerActions =
                         if not (hasWorkers agri)
                         then return "no workers available"
@@ -328,14 +343,16 @@ isProblem agri a = error $ "did not find legal for " ++ show a
 
 
 isResourceProblem :: Action -> Agricola -> Maybe String
-isResourceProblem StartBuildingWoodFences = resourceProblem Wood 1
+isResourceProblem StartBuildingWoodFences = resourceProblem [(Wood,1)]
+isResourceProblem StartBuildingStall = resourceProblem [(Stone,3),(Reed,1)] 
 isResourceProblem _ = const Nothing
 
-resourceProblem :: Good -> Integer -> Agricola -> Maybe String
-resourceProblem good n agri =
+resourceProblem :: [(Good,Integer)] -> Agricola -> Maybe String
+resourceProblem [] agri = Nothing
+resourceProblem ((good,n):goods) agri =
   if agri ^. (player col . supply . goodLens good) < n
      then return $ "there is not enough " ++ show good
-     else Nothing
+     else resourceProblem goods agri
   where col = agri ^. whoseTurn
 
 
