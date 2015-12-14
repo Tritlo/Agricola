@@ -204,7 +204,8 @@ buildTroughInteraction :: Agricola -> Curses (Maybe Action)
 buildTroughInteraction agri = buildTroughInteraction' agri [] firstmsg
   where
     firstmsg = "Click tile to place trough on tile, or stop to cancel."
-    latermsg = "Click tile to place trough on for 3 wood, stop to finish or cancel to cancel."
+    latermsg = "Click tile to place trough on for 3 wood,"
+               ++" stop to finish or cancel to cancel."
     buildTroughInteraction' agri [] _ = do
       case isProblem agri StartBuildingTroughs of
         Nothing -> do
@@ -216,8 +217,11 @@ buildTroughInteraction agri = buildTroughInteraction' agri [] firstmsg
               let newitems = [StartBuildingTroughs, pt]
               case tryTakeMultiAction agri newitems of
                 Left na -> buildTroughInteraction' na newitems latermsg
-                Right err -> return $ Just (SetMessage $ "Cannot build troughs, since " ++ err)
-        Just err -> return $ Just (SetMessage $ "Cannot build troughs, since " ++ err)
+                Right err ->
+                  return $ Just (SetMessage $
+                                 "Cannot build troughs, since " ++ err)
+        Just err ->
+          return $ Just (SetMessage $ "Cannot build troughs, since " ++ err)
     buildTroughInteraction' agri sofar msg = do
       renderGame agri
       action <- placeTroughInteraction msg agri
@@ -229,10 +233,10 @@ buildTroughInteraction agri = buildTroughInteraction' agri [] firstmsg
           case tryTakeMultiAction agri newitems of
             Left na -> buildTroughInteraction' na (sofar ++ newitems) latermsg
             Right err ->
-              buildTroughInteraction' agri sofar $ unlines [latermsg,
-                                                            "Cannot "
-                                                            ++ unwords (map show newitems)
-                                                            ++ " since " ++ err ++ ", try again. " ]
+              buildTroughInteraction' agri sofar $
+              unlines [latermsg, "Cannot "
+                                 ++ unwords (map show newitems)
+                                 ++ " since " ++ err ++ ", try again. " ]
 
 
 
