@@ -10,8 +10,8 @@ import Control.Monad.State
 import Data.Maybe
 import Data.Char (toLower)
 
-placeBorder :: Agricola -> Alignment -> Integer -> Integer -> Agricola
-placeBorder agri al n m = agri &~ do
+placeBorder ::  Alignment -> Integer -> Integer  -> Agricola-> Agricola
+placeBorder al n m = flip (&~) $ do
   color <- use whoseTurn
   (player color . supply . borders) -= 1
   (player color . farm . border al n m) .= Border al True
@@ -49,7 +49,7 @@ subtractWorker = do
 
 
 breedAnimals :: Agricola -> Agricola
-breedAnimals agri = agri &~ do
+breedAnimals = flip (&~) $ do
   id %= breedAnimals' Red
   id %= breedAnimals'  Blue
 
@@ -79,43 +79,36 @@ breedAnimal ::  Color -> Animal -> Agricola -> Agricola
 breedAnimal col an agri = agri &~ when (countAnimal agri col an >= 2)
                           (player col . supply . animals . animalLens an += 1)
 
-takeAction :: Agricola -> Action -> Agricola
-takeAction agri StartBuildingTroughs = agri &~ do
-  col <- use whoseTurn
-  board . buildTroughs .= Just col
-  subtractWorker
-takeAction agri StartBuildingStoneWalls = agri &~ do
-  col <- use whoseTurn
-  board . stoneWall .= Just col
-  subtractWorker
-takeAction agri StartBuildingWoodFences = agri &~ do
-  col <- use whoseTurn
-  board . woodFence .= Just col
-  subtractWorker
-takeAction agri DoNothing = agri
-takeAction agri (SetMessage msg) = agri & message .~  msg
-takeAction agri (PlaceBorder al cx cy) = placeBorder agri al cx cy
-takeAction agri (PlaceAnimal ani cx cy) = placeAnimal agri (cx,cy) ani
-takeAction agri (SpendResources good n) = agri &~ do
+takeAction :: Action -> Agricola -> Agricola
+takeAction StartBuildingTroughs = takeUnitTile BuildTroughs
+takeAction StartBuildingStoneWalls = takeUnitTile StoneWall
+takeAction StartBuildingWoodFences = takeUnitTile WoodFence
+takeAction DoNothing = id
+takeAction (SetMessage msg) = set message msg
+takeAction (PlaceBorder al cx cy) = placeBorder al cx cy
+takeAction (PlaceAnimal ani cx cy) = placeAnimal (cx,cy) ani
+takeAction (SpendResources good n) = flip (&~) $ do
   col <- use whoseTurn
   player col . supply . goodLens good -= n
-takeAction agri (PlaceTrough cx cy) = agri &~ do
+
+takeAction (PlaceTrough cx cy) = flip (&~) $ do
   col <- use whoseTurn
   player col . farm . tile cx cy . trough .= True
-takeAction agri (FreeAnimal an) = agri &~ do
+takeAction (FreeAnimal an) = flip (&~) $ do
   col <- use whoseTurn
   player col . supply . animals . animalLens an -= 1
 
-takeAction agri EndTurn = agri &~ do
+takeAction EndTurn = flip (&~) $ do
   whoseTurn %= otherColor
   curphase <- use phase
   when (curphase == WorkPhase) $ hasPlacedWorker .= False
 
-takeAction agri EndPhase = agri &~ do
+takeAction EndPhase = flip (&~) $ do
   curphase <- use phase
+  starter <- use starting
   case curphase of
     BreedingPhase -> do
-        whoseTurn .= (agri ^. starting)
+        whoseTurn .= starter
         hasPlacedWorker .= False
         red . workers .= 3
         blue . workers .= 3
@@ -123,12 +116,12 @@ takeAction agri EndPhase = agri &~ do
         board %= refillBoard
         phase .= WorkPhase
     WorkPhase -> do
-      id %= breedAnimals 
+      id %= breedAnimals
       phase .= BreedingPhase
-      whoseTurn .= (agri ^. starting)
+      whoseTurn .= starter
       hasPlacedWorker .= True
 
-takeAction agri TakeResources = agri &~ do
+takeAction TakeResources = flip (&~) $ do
   col <- use whoseTurn
   player col . supply . wood += 1
   player col . supply . reeds += 1
@@ -136,27 +129,23 @@ takeAction agri TakeResources = agri &~ do
   id %= takeUnitTile Resources
 
 
-takeAction agri TakeMillpond =
-  takeDuoTile Millpond (goodLens Reed) (animals . sheep) agri
-takeAction agri TakePigsAndSheep =
-  takeDuoTile PigsAndSheep (animals . pigs) (animals . sheep) agri
-takeAction agri TakeCowsAndPigs =
-  takeDuoTile CowsAndPigs (animals . cows) (animals . pigs) agri
-takeAction agri TakeHorsesAndSheep =
-  takeDuoTile HorsesAndSheep (animals .  horses) (animals . sheep) agri
+takeAction TakeMillpond = takeDuoTile Millpond (goodLens Reed) (animals . sheep)
+takeAction TakePigsAndSheep = takeDuoTile PigsAndSheep (animals . pigs) (animals . sheep)
+takeAction TakeCowsAndPigs = takeDuoTile CowsAndPigs (animals . cows) (animals . pigs)
+takeAction TakeHorsesAndSheep = takeDuoTile HorsesAndSheep (animals .  horses) (animals . sheep)
 
 
-takeAction agri TakeSmallForest = agri &~ do
+takeAction TakeSmallForest = flip (&~) $ do
   id %= takeMonoTile SmallForest Wood
   playerColor <- use whoseTurn
   starting .= playerColor
 
-takeAction agri TakeBigForest   = takeMonoTile BigForest Wood agri
-takeAction agri TakeBigQuarry   = takeMonoTile BigQuarry Stone agri
-takeAction agri TakeSmallQuarry = takeMonoTile SmallQuarry Stone agri
+takeAction TakeBigForest   = takeMonoTile BigForest Wood
+takeAction TakeBigQuarry   = takeMonoTile BigQuarry Stone
+takeAction TakeSmallQuarry = takeMonoTile SmallQuarry Stone
 
 
-takeAction agri (TakeAnimal cx cy) = agri &~ do
+takeAction (TakeAnimal cx cy) = flip (&~) $ do
   playerColor <- use whoseTurn
   Just (ani,n) <- use (player playerColor . farm . tile cx cy .tileanimals)
   player playerColor . supply . animals . animalLens ani += 1
@@ -164,7 +153,7 @@ takeAction agri (TakeAnimal cx cy) = agri &~ do
     then player playerColor . farm . tile cx cy .tileanimals .= Nothing
     else player playerColor . farm . tile cx cy .tileanimals .= Just (ani,n-1)
 
-takeAction _ a = error $ "Cannot find action for " ++ show a
+takeAction a = const $ error $ "Cannot find action for " ++ show a
 
 takeUnitTile gbtile agri = agri &~ do
   col <- use whoseTurn
@@ -199,21 +188,21 @@ tryTakeAction agri (MultiAction actions) =
 tryTakeAction agri action =
   case isProblem agri action of
   Nothing -> let newagri = agri & message .~ "" in
-    return $ takeAction newagri action
+    return $ takeAction action newagri
   Just err -> return $ agri & message .~ ("Cannot " ++ show action ++ ", " ++ err)
 
 
 tryTakeMultiAction :: Agricola -> [Action] -> Either Agricola String
 tryTakeMultiAction agri [] = Left agri
 tryTakeMultiAction agri (a:as) = case isProblem agri a of
-  Nothing ->  tryTakeMultiAction (takeAction agri a) as
+  Nothing ->  tryTakeMultiAction (takeAction a agri) as
   Just err -> Right err
 
 update :: Agricola -> Maybe Action -> Maybe Agricola
 update agri action = action >>= tryTakeAction agri
 
-placeAnimal :: Agricola -> Coord -> Animal -> Agricola
-placeAnimal agri (cx,cy) animal = agri &~ do
+placeAnimal ::  Coord -> Animal -> Agricola ->  Agricola
+placeAnimal (cx,cy) animal = flip (&~) $ do
   colr <- use whoseTurn
   player colr . supply . animals . animalLens animal -= 1
   player colr . farm . tile cx cy . tileanimals %= addAnimal animal

@@ -11,7 +11,6 @@ import UI.NCurses hiding (Color)
 
 
 
-
 gameLoop :: Agricola -> Curses Agricola
 gameLoop agri = do
   (w,_,_,_) <- settings
