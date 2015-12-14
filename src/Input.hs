@@ -215,7 +215,7 @@ multiActionInteraction msgs costs interaction agri
        if null sofar && isJust prob
          then return $ Just (SetMessage $ "Cannot " ++ show c ++ ", since " ++ (fromJust prob))
          else do
-         renderGame agri
+         renderGame (takeAction c agri)
          action <- interaction (unlines [m,err]) agri
          case action of
            Nothing -> return $ Just DoNothing

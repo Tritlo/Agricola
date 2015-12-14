@@ -10,7 +10,7 @@ import Control.Monad.State
 import Data.Maybe
 import Data.Char (toLower)
 
-placeBorder ::  Alignment -> Integer -> Integer  -> Agricola-> Agricola
+placeBorder ::  Alignment -> Integer -> Integer  -> Agricola -> Agricola
 placeBorder al n m = flip (&~) $ do
   color <- use whoseTurn
   (player color . supply . borders) -= 1
