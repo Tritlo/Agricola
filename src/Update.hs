@@ -449,10 +449,24 @@ hasBorder farm (cn,cm) S = farm ^. (border H (cn +1) cm. isThere)
 hasBorder farm (cn,cm) W = farm ^. (border V cn cm . isThere)
 hasBorder farm (cn,cm) E = farm ^. (border V cn (cm + 1) . isThere)
 
+buildingCapacity :: Building -> Integer
+buildingCapacity FarmHouse =1
+buildingCapacity Stall = 3
+buildingCapacity Stable = 5
+buildingCapacity OpenStable = 5
+buildingCapacity HalfTimberedHouse = 2
+buildingCapacity Storage = 2
+buildingCapacity Shelter = 1
+
 animalCapacity :: Agricola -> Coord -> Integer
-animalCapacity agri c | not (isEnclosed agri c) = hasTrough agri c
-                      | isEnclosed agri c = 2 ^ (1 + troughNum agri c)
+animalCapacity agri c@(cx,cy) =
+  case (agri ^. player col . farm . tile cx cy . building) of
+  Just b -> (buildingCapacity b)*(2^t)
+  Nothing -> if (isEnclosed agri c)
+             then  2 ^ (1 + troughNum agri c)
+             else t
   where col = agri ^. whoseTurn
+        t   = hasTrough agri c
 
 animalSpace :: Agricola -> Coord -> Integer
 animalSpace agri c@(cx,cy) | isNothing tileAn = animalCapacity agri c
