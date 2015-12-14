@@ -169,7 +169,6 @@ takeAction agri TakeSmallQuarry = agri &~ do
   Right s <- use (board . smallQuarry)
   playerColor <- use whoseTurn
   player playerColor . supply . stones += s
-  starting .= playerColor
   board . smallQuarry .= Left (agri ^. whoseTurn)
   subtractWorker
 
@@ -319,7 +318,6 @@ isProblem agri (TakeAnimal cx cy) = if not (hasAnimals agri cx cy)
                                     then Just "since there is no animal on that tile."
                                     else Nothing
 
-                                         
 isProblem agri (PlaceAnimal ani cx cy) = if (agri ^. (player col . supply . animals . animalLens ani) == 0)
                                          then Just $ "because there is no " ++ map toLower (show ani) ++ " to place"
                                          else case (isSameAnimal agri col c ani) of
