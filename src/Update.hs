@@ -102,9 +102,9 @@ takeAction (SpendResources good n) = flip (&~) $ do
 takeAction (PlaceTrough cx cy) = flip (&~) $ do
   col <- use whoseTurn
   player col . farm . tile cx cy . trough .= True
-takeAction (PlaceStall cx cy) = flip (&~) $ do
+takeAction (PlaceBuilding b cx cy) = flip (&~) $ do
   col <- use whoseTurn
-  player col . farm . tile cx cy . building .= Just Stall
+  player col . farm . tile cx cy . building .= Just b
 takeAction (FreeAnimal an) = flip (&~) $ do
   col <- use whoseTurn
   player col . supply . animals . animalLens an -= 1
@@ -327,7 +327,7 @@ isProblem agri (PlaceTrough cx cy) = if (agri ^. player col . farm . tile cx cy.
                                         then Just "because there is already a trough on that tile"
                                         else Nothing
                                       where col = agri ^. whoseTurn
-isProblem agri (PlaceStall cx cy) = if (isJust (agri ^. player col . farm . tile cx cy. building))
+isProblem agri (PlaceBuilding b cx cy) = if (isJust (agri ^. player col . farm . tile cx cy. building))
                                         then Just "because there is already a building on that tile"
                                         else Nothing
                                       where col = agri ^. whoseTurn

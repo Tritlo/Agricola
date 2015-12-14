@@ -55,7 +55,8 @@ emptySupply = Supply 0 0 0 0 emptyAnimals
 data Building = Stall | Stable | FarmHouse |
                 HalfTimberedHouse | Storage | Shelter |
                 OpenStable
-
+                deriving (Eq)
+                         
 data Animal = Sheep | Pig | Cow | Horse deriving ( Eq)
 
 animalLens :: Functor f => Animal -> (Integer -> f Integer) -> Animals -> f Animals
@@ -478,7 +479,7 @@ data Action = DoNothing
               | TakeAnimal Integer Integer
               | PlaceAnimal Animal Integer Integer
               | PlaceTrough Integer Integer
-              | PlaceStall Integer Integer 
+              | PlaceBuilding Building Integer Integer 
               | SpendResources Good Integer
               | StartBuildingTroughs
               | StartBuildingStoneWalls
@@ -510,7 +511,7 @@ instance Show Action where
   show (TakeAnimal n m) = "take animal from tile (" ++ show n ++", " ++ show m ++ ")"
   show (PlaceAnimal a n m) = "place " ++ map toLower (show a) ++ " on tile (" ++ show n ++", " ++ show m ++ ")"
   show (PlaceTrough n m) = "place trough on tile (" ++ show n ++", " ++ show m ++")"
-  show (PlaceStall n m) = "place  on tile (" ++ show n ++", " ++ show m ++")"
+  show (PlaceBuilding b n m) = "place " ++ map toLower (show b) ++ " on tile (" ++ show n ++", " ++ show m ++")"
   show (SpendResources good n) = "spend " ++ show n ++ " of your " ++  map toLower (show good)
   show (SetMessage str) = str
   show StartBuildingTroughs = "Start building troughs"

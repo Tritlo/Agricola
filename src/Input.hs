@@ -170,11 +170,11 @@ placeBorderInteraction msg = interaction msg click
           Nothing -> placeBorderInteraction msg agri
           Just (a,x,y) -> return $ Just $ PlaceBorder a x y
 
-placeStallInteraction :: String -> Agricola -> Curses (Maybe Action)
-placeStallInteraction msg = interaction msg click
+placeBuildingInteraction :: Building -> String -> Agricola -> Curses (Maybe Action)
+placeBuildingInteraction b msg = interaction msg click
   where click agri (mx,my) = case clickedTile agri (mx,my) of
-          Nothing -> placeStallInteraction msg agri
-          Just (x,y) -> return $ Just $ PlaceStall x y
+          Nothing -> placeBuildingInteraction b msg agri
+          Just (x,y) -> return $ Just $ PlaceBuilding b x y
           
 -- return Just DoNothing on nothing
 takeAnimalInteraction agri =  (<|> Just DoNothing) <$>
@@ -267,7 +267,7 @@ buildStallInteraction =
   multiActionInteraction
   ["Click tile to place stall for 3 stones and 1 reed, or stop to cancel."]
   [StartBuildingStall]
-  placeStallInteraction
+  (placeBuildingInteraction Stall)
 
 stoneWallInteraction :: Agricola -> Curses (Maybe Action)
 stoneWallInteraction =
