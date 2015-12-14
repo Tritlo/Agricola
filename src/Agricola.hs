@@ -55,7 +55,8 @@ emptySupply = Supply 0 0 0 0 emptyAnimals
 data Building = Stall | Stable | FarmHouse |
                 HalfTimberedHouse | Storage | Shelter |
                 OpenStable
-
+                deriving (Eq)
+                         
 data Animal = Sheep | Pig | Cow | Horse deriving ( Eq)
 
 animalLens :: Functor f => Animal -> (Integer -> f Integer) -> Animals -> f Animals
@@ -71,7 +72,6 @@ goodLens Wood = wood
 goodLens Stone = stones
 goodLens Reed = reeds
 goodLens Fence = borders
-
 
 data Alignment = H | V deriving (Eq, Show)
 data Border = Border {  _alignment ::  Alignment
@@ -477,10 +477,12 @@ data Action = DoNothing
               | TakeAnimal Integer Integer
               | PlaceAnimal Animal Integer Integer
               | PlaceTrough Integer Integer
+              | PlaceBuilding Building Integer Integer 
               | SpendResources Good Integer
               | StartBuildingTroughs
               | StartBuildingStoneWalls
               | StartBuildingWoodFences
+              | StartBuildingStall
               | SetMessage String
               | MultiAction [Action]
             deriving (Eq)
@@ -507,12 +509,13 @@ instance Show Action where
   show (TakeAnimal n m) = "take animal from tile (" ++ show n ++", " ++ show m ++ ")"
   show (PlaceAnimal a n m) = "place " ++ map toLower (show a) ++ " on tile (" ++ show n ++", " ++ show m ++ ")"
   show (PlaceTrough n m) = "place trough on tile (" ++ show n ++", " ++ show m ++")"
+  show (PlaceBuilding b n m) = "place " ++ map toLower (show b) ++ " on tile (" ++ show n ++", " ++ show m ++")"
   show (SpendResources good n) = "spend " ++ show n ++ " of your " ++  map toLower (show good)
   show (SetMessage str) = str
   show StartBuildingTroughs = "Start building troughs"
   show StartBuildingWoodFences = "Start building wood fences"
   show StartBuildingStoneWalls = "Start building stone walls"
-
+  show StartBuildingStall = "Build stall"
 
 instance Show Building where
   show Stall = "Stall"

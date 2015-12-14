@@ -170,7 +170,12 @@ placeBorderInteraction msg = interaction msg click
           Nothing -> placeBorderInteraction msg agri
           Just (a,x,y) -> return $ Just $ PlaceBorder a x y
 
-
+placeBuildingInteraction :: Building -> String -> Agricola -> Curses (Maybe Action)
+placeBuildingInteraction b msg = interaction msg click
+  where click agri (mx,my) = case clickedTile agri (mx,my) of
+          Nothing -> placeBuildingInteraction b msg agri
+          Just (x,y) -> return $ Just $ PlaceBuilding b x y
+          
 -- return Just DoNothing on nothing
 takeAnimalInteraction agri =  (<|> Just DoNothing) <$>
                               interaction "Choose tile to take animal from:" click agri
@@ -257,6 +262,13 @@ buildTroughInteraction =
                        , "stop to finish or cancel to cancel."
                        ]
 
+buildStallInteraction :: Agricola -> Curses (Maybe Action)
+buildStallInteraction =
+  multiActionInteraction
+  ["Click tile to place stall for 3 stones and 1 reed, or stop to cancel."]
+  [StartBuildingStall]
+  (placeBuildingInteraction Stall)
+
 stoneWallInteraction :: Agricola -> Curses (Maybe Action)
 stoneWallInteraction =
   multiActionInteraction
@@ -268,8 +280,6 @@ stoneWallInteraction =
     firstmsg = "Click on border to place, or click stop to cancel."
     secondmsg = "Click on border to place, stop to finish or cancel to cancel." 
     latermsg = "Click on border to place for 2 stones, stop to finish or cancel to cancel."
-
-
 
 woodFenceInteraction :: Agricola -> Curses (Maybe Action)
 woodFenceInteraction =
@@ -283,6 +293,7 @@ woodFenceInteraction =
     latermsg = "Click on border to place for 1 wood, stop to finish or cancel to cancel."
 
 mouseClick :: Coord -> Agricola -> Curses (Maybe Action)
+
 mouseClick (mx,my) agri =
   case clickedControls (mx,my) of
     Just QuitButton -> return Nothing
@@ -308,6 +319,7 @@ mouseClick (mx,my) agri =
       Just BuildTroughs -> buildTroughInteraction agri
       Just StoneWall -> stoneWallInteraction agri
       Just WoodFence -> woodFenceInteraction agri
+      Just BuildStall -> buildStallInteraction agri
       Just a -> return $ Just (SetMessage (show a ++ " not implemented"))
       Nothing -> return $ Just DoNothing
     _ -> return $ Just DoNothing
