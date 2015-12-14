@@ -450,7 +450,7 @@ hasBorder farm (cn,cm) W = farm ^. (border V cn cm . isThere)
 hasBorder farm (cn,cm) E = farm ^. (border V cn (cm + 1) . isThere)
 
 buildingCapacity :: Building -> Integer
-buildingCapacity FarmHouse =1
+buildingCapacity Cottage = 1
 buildingCapacity Stall = 3
 buildingCapacity Stable = 5
 buildingCapacity OpenStable = 5
