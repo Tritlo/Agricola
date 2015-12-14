@@ -270,33 +270,29 @@ resized = do
 
 
 getAction :: Event -> Agricola -> Curses (Maybe Action)
-getAction (EventCharacter 'q')            = const $ return Nothing
-getAction (EventCharacter 'Q')            = const $ return Nothing
-getAction (EventCharacter ' ')            = \agri -> getCursorCoord >>= (flip mouseClick agri)
-getAction (EventCharacter '\n')           = const $ return $ Just EndPhase
-getAction (EventCharacter 'f')            = const $ return $ Just TakeSmallForest
-getAction (EventCharacter 'F')            = const $ return $ Just TakeBigForest
-getAction (EventCharacter 's')            = const $ return $ Just TakeSmallQuarry
-getAction (EventCharacter 'S')            = const $ return $ Just TakeBigQuarry
-getAction (EventCharacter 'e')            = const $ return $ Just TakeExpand
-getAction (EventCharacter 'm')            = const $ return $ Just TakeMillpond
-getAction (EventCharacter 'p')            = const $ return $ Just TakePigsAndSheep
-getAction (EventCharacter 'c')            = const $ return $ Just TakeCowsAndPigs
-getAction (EventCharacter 'h')            = const $ return $ Just TakeHorsesAndSheep
-getAction (EventCharacter 'r')            = const $ return $ Just TakeResources
-getAction (EventCharacter 'R')            = const freeAnimalInteraction
-getAction (EventCharacter 'a')            = placeAnimalInteraction
-getAction (EventCharacter 'A')            = takeAnimalInteraction
-getAction (EventCharacter 'b')            = placeBorderInteraction
-getAction (EventCharacter char)           = const $ return $ Just DoNothing
-getAction (EventSpecialKey KeyUpArrow)    = const $ return $ Just DoNothing
-getAction (EventSpecialKey KeyDownArrow)  = const $ return $ Just DoNothing
-getAction (EventSpecialKey KeyLeftArrow)  = const $ return $ Just DoNothing
-getAction (EventSpecialKey KeyRightArrow) = const $ return $ Just DoNothing
-getAction (EventSpecialKey key)           = const undefined
-getAction EventResized                    = const resized
-getAction (EventUnknown ev)               = const $ return $ Just DoNothing
-getAction (EventMouse int mouseState)     = mouseClick (mx,my)
+getAction (EventCharacter 'q')      = const $ return Nothing
+getAction (EventCharacter 'Q')      = const $ return Nothing
+getAction (EventCharacter ' ')      = \ag -> getCursorCoord >>= (flip mouseClick ag)
+getAction (EventCharacter '\n')     = const $ return $ Just EndPhase
+getAction (EventCharacter 'f')      = const $ return $ Just TakeSmallForest
+getAction (EventCharacter 'F')      = const $ return $ Just TakeBigForest
+getAction (EventCharacter 's')      = const $ return $ Just TakeSmallQuarry
+getAction (EventCharacter 'S')      = const $ return $ Just TakeBigQuarry
+getAction (EventCharacter 'e')      = const $ return $ Just TakeExpand
+getAction (EventCharacter 'm')      = const $ return $ Just TakeMillpond
+getAction (EventCharacter 'p')      = const $ return $ Just TakePigsAndSheep
+getAction (EventCharacter 'c')      = const $ return $ Just TakeCowsAndPigs
+getAction (EventCharacter 'h')      = const $ return $ Just TakeHorsesAndSheep
+getAction (EventCharacter 'r')      = const $ return $ Just TakeResources
+getAction (EventCharacter 'R')      = const freeAnimalInteraction
+getAction (EventCharacter 'a')      = placeAnimalInteraction
+getAction (EventCharacter 'A')      = takeAnimalInteraction
+getAction (EventCharacter 'b')      = placeBorderInteraction
+getAction (EventCharacter char)     = const $ return $ Just DoNothing
+getAction (EventSpecialKey key)     = const $ return $ Just DoNothing
+getAction EventResized              = const resized
+getAction (EventUnknown ev)         = const $ return $ Just DoNothing
+getAction (EventMouse _ mouseState) = mouseClick (mx,my)
   where (mx,my,_) = mouseCoordinates mouseState
 
 waitFor :: Window -> Curses Event
