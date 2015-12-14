@@ -297,15 +297,16 @@ mouseClick :: Coord -> Agricola -> Curses (Maybe Action)
 mouseClick (mx,my) agri =
   case clickedControls (mx,my) of
     Just QuitButton -> return Nothing
-    Just a | isSomonesTurn -> case a of
+    Just a | isSomeonesTurn -> case a of
       StopButton -> return $ Just DoNothing
       EndTurnButton -> return $ Just EndTurn
       EndPhaseButton -> return $ Just EndPhase
       PlaceAnimalButton -> placeAnimalInteraction agri
       TakeAnimalButton -> takeAnimalInteraction agri
       FreeAnimalButton -> freeAnimalInteraction
+      _ -> return $ Just DoNothing
     Just a -> return $ Just DoNothing
-    Nothing  | isSomonesTurn -> case clickedBoard agri (mx,my) of
+    Nothing  | isSomeonesTurn -> case clickedBoard agri (mx,my) of
       Just SmallForest -> return $ Just TakeSmallForest
       Just BigForest -> return $ Just TakeBigForest
       Just SmallQuarry -> return $ Just TakeSmallQuarry
@@ -323,7 +324,7 @@ mouseClick (mx,my) agri =
       Just a -> return $ Just (SetMessage (show a ++ " not implemented"))
       Nothing -> return $ Just DoNothing
     _ -> return $ Just DoNothing
-    where isSomonesTurn = agri ^. whoseTurn /= No
+    where isSomeonesTurn = agri ^. whoseTurn /= No
 
 resized :: Curses (Maybe Action)
 resized = do
