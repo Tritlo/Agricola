@@ -6,7 +6,6 @@
 module Agricola where
 
 import Control.Lens
-import Data.Either
 import Data.List
 import Test.QuickCheck
 import Control.Monad.State
@@ -28,10 +27,10 @@ emptyAnimals :: Animals
 emptyAnimals = Animals 0 0 0 0
 
 instance Show Animals where
-  show (Animals sh pi co ho) = "Animals: " ++ show sh ++ " sheep "
-                               ++ show pi ++ " pigs "
-                               ++ show co ++ " cows "
-                               ++ show ho  ++ " horses."
+  show (Animals s p c h) = "Animals: " ++ show s ++ " sheep "
+                               ++ show p ++ " pigs "
+                               ++ show c ++ " cows "
+                               ++ show h  ++ " horses."
 
 data Supply = Supply { _borders :: Integer
                      , _wood    :: Integer
@@ -646,6 +645,7 @@ startingGlobalSupply = emptySupply &~ do
 player :: Color -> Lens' Agricola Player
 player Red = red
 player Blue = blue
+player No = error "Attempted to use no player"
 
 
 initPlayer :: Player -> Player
