@@ -215,8 +215,15 @@ multiActionInteraction msgs costs interaction agri
        if null sofar && isJust prob
          then return $ Just (SetMessage $ "Cannot " ++ show c ++ ", since " ++ (fromJust prob))
          else do
-         renderGame (takeAction c agri)
-         action <- interaction (unlines [m,err]) agri
+         if isJust prob
+           then renderGame agri
+           else renderGame  $ takeAction c agri
+         let errtop = if (isJust prob)
+                      then "Cannot do more, since "
+                           ++ fromJust prob
+                           ++ ". Press stop to finish or cancel to cancel."
+                      else err
+         action <- interaction (unlines [m,errtop]) agri
          case action of
            Nothing -> return $ Just DoNothing
            Just DoNothing -> return $ Just (MultiAction sofar)
@@ -226,10 +233,12 @@ multiActionInteraction msgs costs interaction agri
                Left na -> multiActionInteraction' na (sofar ++ newitems) cs ms ""
                Right err -> multiActionInteraction' agri sofar costs msgs $
                                      unwords ["Cannot "
-                                              , unwords (map show newitems)
+                                              , show c
+                                              , "to"
+                                              , show a
                                               ,"since "
                                               , err
-                                              ,", try again. "
+                                              ,", try again."
                                               ]
 
 

@@ -5,7 +5,8 @@ import qualified Agricola as Ag (Color)
 import UI.NCurses
 import qualified UI.NCurses
 import Control.Lens
-
+import Update
+import Data.Maybe
 
 
 drawLines :: Integral a => a -> a -> [String] -> Update a
@@ -94,7 +95,9 @@ drawState agri colRed colBlue colBoard = do
      drawString $ show (agri ^. phase) ++ ", "
      drawString $ show (agri ^. whoseTurn) ++ "'s turn. "
      if agri ^. hasPlacedWorker
-       then drawString "Turn can be ended if no animals remain unaccounted for."
+       then if (isNothing $ isProblem agri EndTurn)
+            then drawString "Turn can be ended on next action."
+            else drawString "Turn can be ended after placing animals."
        else drawString $ show (agri ^. whoseTurn) ++ " has yet to place a worker."
      return ()
 
