@@ -293,32 +293,37 @@ woodFenceInteraction =
     latermsg = "Click on border to place for 1 wood, stop to finish or cancel to cancel."
 
 mouseClick :: Coord -> Agricola -> Curses (Maybe Action)
-mouseClick (mx,my) agri = do
-  case clickedBoard agri (mx,my) of
-    Just SmallForest -> return $ Just TakeSmallForest
-    Just BigForest -> return $ Just TakeBigForest
-    Just SmallQuarry -> return $ Just TakeSmallQuarry
-    Just BigQuarry -> return $ Just TakeBigQuarry
-    Just Resources -> return $ Just TakeResources
-    Just Expand -> return $ Just TakeExpand
-    Just Millpond -> return $ Just TakeMillpond
-    Just PigsAndSheep -> return $ Just TakePigsAndSheep
-    Just CowsAndPigs -> return $ Just TakeCowsAndPigs
-    Just HorsesAndSheep -> return $ Just TakeHorsesAndSheep
-    Just BuildTroughs -> buildTroughInteraction agri
-    Just StoneWall -> stoneWallInteraction agri
-    Just WoodFence -> woodFenceInteraction agri
-    Just BuildStall -> buildStallInteraction agri
-    Just a -> return $ Just (SetMessage (show a ++ " not implemented"))
-    Nothing -> case clickedControls (mx,my) of
-      Just StopButton -> return $ Just DoNothing
-      Just EndTurnButton -> return $ Just EndTurn
-      Just EndPhaseButton -> return $ Just EndPhase
-      Just PlaceAnimalButton -> placeAnimalInteraction agri
-      Just TakeAnimalButton -> takeAnimalInteraction agri
-      Just FreeAnimalButton -> freeAnimalInteraction
-      Just QuitButton -> return Nothing
-      _ -> return $ Just DoNothing
+
+mouseClick (mx,my) agri =
+  case clickedControls (mx,my) of
+    Just QuitButton -> return Nothing
+    Just a | isSomonesTurn -> case a of
+      StopButton -> return $ Just DoNothing
+      EndTurnButton -> return $ Just EndTurn
+      EndPhaseButton -> return $ Just EndPhase
+      PlaceAnimalButton -> placeAnimalInteraction agri
+      TakeAnimalButton -> takeAnimalInteraction agri
+      FreeAnimalButton -> freeAnimalInteraction
+    Just a -> return $ Just DoNothing
+    Nothing  | isSomonesTurn -> case clickedBoard agri (mx,my) of
+      Just SmallForest -> return $ Just TakeSmallForest
+      Just BigForest -> return $ Just TakeBigForest
+      Just SmallQuarry -> return $ Just TakeSmallQuarry
+      Just BigQuarry -> return $ Just TakeBigQuarry
+      Just Resources -> return $ Just TakeResources
+      Just Expand -> return $ Just TakeExpand
+      Just Millpond -> return $ Just TakeMillpond
+      Just PigsAndSheep -> return $ Just TakePigsAndSheep
+      Just CowsAndPigs -> return $ Just TakeCowsAndPigs
+      Just HorsesAndSheep -> return $ Just TakeHorsesAndSheep
+      Just BuildTroughs -> buildTroughInteraction agri
+      Just StoneWall -> stoneWallInteraction agri
+      Just WoodFence -> woodFenceInteraction agri
+      Just BuildStall -> buildStallInteraction agri
+      Just a -> return $ Just (SetMessage (show a ++ " not implemented"))
+      Nothing -> return $ Just DoNothing
+    _ -> return $ Just DoNothing
+    where isSomonesTurn = agri ^. whoseTurn /= No
 
 resized :: Curses (Maybe Action)
 resized = do
@@ -332,7 +337,7 @@ getAction :: Event -> Agricola -> Curses (Maybe Action)
 getAction (EventCharacter 'q')      = const $ return Nothing
 getAction (EventCharacter 'Q')      = const $ return Nothing
 getAction (EventCharacter ' ')      = \ag -> getCursorCoord >>= (flip mouseClick ag)
-getAction (EventCharacter '\n')     = const $ return $ Just EndPhase
+getAction (EventCharacter '\n')     = const $ return $ Just EndTurn
 getAction (EventCharacter 'f')      = const $ return $ Just TakeSmallForest
 getAction (EventCharacter 'F')      = const $ return $ Just TakeBigForest
 getAction (EventCharacter 's')      = const $ return $ Just TakeSmallQuarry
@@ -343,9 +348,6 @@ getAction (EventCharacter 'p')      = const $ return $ Just TakePigsAndSheep
 getAction (EventCharacter 'c')      = const $ return $ Just TakeCowsAndPigs
 getAction (EventCharacter 'h')      = const $ return $ Just TakeHorsesAndSheep
 getAction (EventCharacter 'r')      = const $ return $ Just TakeResources
-getAction (EventCharacter 'R')      = const freeAnimalInteraction
-getAction (EventCharacter 'a')      = placeAnimalInteraction
-getAction (EventCharacter 'A')      = takeAnimalInteraction
 getAction (EventCharacter 'b')      = placeBorderInteraction "Choose border to place"
 getAction (EventCharacter char)     = const $ return $ Just DoNothing
 getAction (EventSpecialKey key)     = const $ return $ Just DoNothing

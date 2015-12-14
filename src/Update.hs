@@ -10,6 +10,9 @@ import Control.Monad.State
 import Data.Maybe
 import Data.Char (toLower)
 
+
+
+
 placeBorder ::  Alignment -> Integer -> Integer  -> Agricola -> Agricola
 placeBorder al n m = flip (&~) $ do
   color <- use whoseTurn
@@ -119,18 +122,29 @@ takeAction EndPhase = flip (&~) $ do
   starter <- use starting
   case curphase of
     BreedingPhase -> do
-        whoseTurn .= starter
+        bordsleft <- use (global . borders)
+        agri <- use id
         hasPlacedWorker .= False
-        red . workers .= 3
-        blue . workers .= 3
-        board %= takeWorkers
-        board %= refillBoard
-        phase .= WorkPhase
+        if bordsleft == 0
+          then
+            do phase .= Finished
+               message .= finalScore agri
+               whoseTurn .= No
+          else
+            do whoseTurn .= starter
+               red . workers .= 3
+               blue . workers .= 3
+               global . borders -= 1
+               board %= takeWorkers
+               board %= refillBoard
+               phase .= WorkPhase
     WorkPhase -> do
       id %= breedAnimals
       phase .= BreedingPhase
       whoseTurn .= starter
       hasPlacedWorker .= True
+    Finished -> id %= id
+
 
 takeAction TakeResources = flip (&~) $ do
   col <- use whoseTurn
@@ -154,6 +168,7 @@ takeAction TakeSmallForest = flip (&~) $ do
 takeAction TakeBigForest   = takeMonoTile BigForest Wood
 takeAction TakeBigQuarry   = takeMonoTile BigQuarry Stone
 takeAction TakeSmallQuarry = takeMonoTile SmallQuarry Stone
+takeAction TakeExpand = takeMonoTile Expand Fence
 
 
 takeAction (TakeAnimal cx cy) = flip (&~) $ do
@@ -477,3 +492,32 @@ hasTrough :: Agricola -> Coord -> Integer
 hasTrough agri (cx,cy) | agri ^. player col . farm . tile cx cy . trough = 1
                        | otherwise = 0
   where col = agri ^. whoseTurn
+
+finalPlayerScore :: Color -> Agricola -> Integer
+finalPlayerScore _ _ = 0
+
+finalScore :: Agricola -> String
+finalScore agri = final
+  where reds = finalPlayerScore Red agri
+        blues = finalPlayerScore Blue agri
+        winner = if reds > blues then Red else Blue
+        loser = otherColor winner
+        winners = maximum [reds, blues]
+        losers = minimum [reds, blues]
+        final = unwords [ show winner
+                        , "wins with a score of"
+                        , show winners
+                        , "while"
+                        , show loser
+                        , "only got a score of"
+                        , show losers
+                        ]
+
+startingState :: Agricola
+startingState = emptyAgricola &~ do
+  player Blue %=  initPlayer
+  player Red  %=  initPlayer
+  board .= emptyBoard
+  global .= startingGlobalSupply
+  phase .= BreedingPhase
+  id %= takeAction EndPhase
