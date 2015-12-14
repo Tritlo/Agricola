@@ -162,13 +162,13 @@ placeTroughInteraction msg = interaction msg click
           Just (x,y) -> return $ Just $ PlaceTrough x y
                                   
 
-placeBorderInteraction = interaction "Choose border to place" click
+placeBorderInteraction msg = interaction msg click
   where click agri (mx,my) = case clickedBorder agri (mx,my) of
           Nothing -> case clickedControls (mx,my) of
             Just StopButton -> return $ Just DoNothing
             Just CancelButton -> return Nothing
             Just QuitButton -> return Nothing
-            _ -> return $ Just DoNothing
+            _ -> placeBorderInteraction msg agri
           Just (a, x,y) -> return $ Just $ PlaceBorder a x y
 
 
@@ -245,7 +245,7 @@ stoneWallInteraction agri = stoneWallInteraction' agri [] firstmsg
     stoneWallInteraction' agri [] _ = do
       case isProblem agri StartBuildingStoneWalls of
         Nothing -> do
-          action <- placeBorderInteraction agri
+          action <- placeBorderInteraction firstmsg agri
           case action of
             Nothing -> return $ Just DoNothing
             Just DoNothing -> return $ Just DoNothing
@@ -257,7 +257,7 @@ stoneWallInteraction agri = stoneWallInteraction' agri [] firstmsg
         Just err -> return $ Just (SetMessage $ "Cannot build borders, since " ++ err)
     stoneWallInteraction' agri sofar msg = do
       renderGame agri
-      action <- placeBorderInteraction agri
+      action <- placeBorderInteraction latermsg agri
       case action of
         Nothing -> return $ Just DoNothing
         Just DoNothing -> return $ Just (MultiAction sofar)
@@ -323,7 +323,7 @@ getAction (EventCharacter 'r')      = const $ return $ Just TakeResources
 getAction (EventCharacter 'R')      = const freeAnimalInteraction
 getAction (EventCharacter 'a')      = placeAnimalInteraction
 getAction (EventCharacter 'A')      = takeAnimalInteraction
-getAction (EventCharacter 'b')      = placeBorderInteraction
+getAction (EventCharacter 'b')      = placeBorderInteraction "Choose border to place"
 getAction (EventCharacter char)     = const $ return $ Just DoNothing
 getAction (EventSpecialKey key)     = const $ return $ Just DoNothing
 getAction EventResized              = const resized
