@@ -169,7 +169,7 @@ placeBorderInteraction msg = interaction msg click
             Just CancelButton -> return Nothing
             Just QuitButton -> return Nothing
             _ -> placeBorderInteraction msg agri
-          Just (a, x,y) -> return $ Just $ PlaceBorder a x y
+          Just (a,x,y) -> return $ Just $ PlaceBorder a x y
 
 
 takeAnimalInteraction = interaction "Choose tile to take animal from:" click
@@ -237,6 +237,7 @@ buildTroughInteraction agri = buildTroughInteraction' agri [] firstmsg
               unlines [latermsg, "Cannot "
                                  ++ unwords (map show newitems)
                                  ++ " since " ++ err ++ ", try again. " ]
+
 stoneWallInteraction :: Agricola -> Curses (Maybe Action)
 stoneWallInteraction agri = stoneWallInteraction' agri [] firstmsg
   where
@@ -261,15 +262,15 @@ stoneWallInteraction agri = stoneWallInteraction' agri [] firstmsg
       case action of
         Nothing -> return $ Just DoNothing
         Just DoNothing -> return $ Just (MultiAction sofar)
-        Just pb@(PlaceBorder al x y) -> do
+        Just pb@(PlaceBorder _ _ _) -> do
           let newitems = [SpendResources Stone 2, pb]
           case tryTakeMultiAction agri newitems of
             Left na -> stoneWallInteraction' na (sofar ++ newitems) latermsg
             Right err ->
-              stoneWallInteraction' agri sofar $ unlines [latermsg,
-                                                            "Cannot "
-                                                            ++ unwords (map show newitems)
-                                                            ++ " since " ++ err ++ ", try again. " ]
+              stoneWallInteraction' agri sofar $
+              unlines [latermsg, "Cannot "
+                                ++ unwords (map show newitems)
+                                ++ " since " ++ err ++ ", try again. " ]
 
 mouseClick :: Coord -> Agricola -> Curses (Maybe Action)
 mouseClick (mx,my) agri = do
