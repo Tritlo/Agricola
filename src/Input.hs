@@ -216,9 +216,11 @@ multiActionInteraction msgs costs interaction agri
          then return $ Just (SetMessage $ "Cannot " ++ show c
                              ++ ", since " ++ (fromJust prob))
          else do
-         if isJust prob
-           then renderGame agri
-           else renderGame  $ takeAction c agri
+         -- always render the first cost, which is usually
+         -- a place worker on tile action.
+         if null sofar
+           then renderGame $ takeAction c agri
+           else renderGame agri
          let errtop = if (isJust prob)
                       then "Cannot do more, since "
                            ++ fromJust prob
