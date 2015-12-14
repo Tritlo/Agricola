@@ -469,6 +469,8 @@ data Action = DoNothing
               | PlaceTrough Integer Integer
               | SpendResources Good Integer
               | StartBuildingTroughs
+              | StartBuildingStoneWalls
+              | StartBuildingWoodFences
               | SetMessage String
               | MultiAction [Action]
             deriving (Eq)
@@ -498,6 +500,8 @@ instance Show Action where
   show (SpendResources good n) = "spend " ++ show n ++ " of your " ++  map toLower (show good)
   show (SetMessage str) = str
   show StartBuildingTroughs = "Start building troughs"
+  show StartBuildingWoodFences = "Start building wood fences"
+  show StartBuildingStoneWalls = "Start building stone walls"
 
 
 instance Show Building where

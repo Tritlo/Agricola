@@ -215,6 +215,39 @@ buildTroughInteraction agri = buildTroughInteraction' agri [] firstmsg
                                                             "Cannot "
                                                             ++ unwords (map show newitems)
                                                             ++ " since " ++ err ++ ", try again. " ]
+stoneWallInteraction :: Agricola -> Curses (Maybe Action)
+stoneWallInteraction agri = stoneWallInteraction' agri [] firstmsg
+  where
+    firstmsg = "Click on border to place, or click stop to cancel."
+    latermsg = "Click on border to place for 2 stones, stop to finish or cancel to cancel."
+    stoneWallInteraction' agri [] _ = do
+      case isProblem agri StartBuildingStoneWalls of
+        Nothing -> do
+          action <- placeBorderInteraction agri
+          case action of
+            Nothing -> return $ Just DoNothing
+            Just DoNothing -> return $ Just DoNothing
+            Just pb@(PlaceBorder _ _ _) -> do
+              let newitems = [StartBuildingStoneWalls, pb]
+              case tryTakeMultiAction agri newitems of
+                Left na -> stoneWallInteraction' na newitems latermsg
+                Right err -> return $ Just (SetMessage $ "Cannot build borders, since " ++ err)
+        Just err -> return $ Just (SetMessage $ "Cannot build borders, since " ++ err)
+    stoneWallInteraction' agri sofar msg = do
+      renderGame agri
+      action <- placeBorderInteraction agri
+      case action of
+        Nothing -> return $ Just DoNothing
+        Just DoNothing -> return $ Just (MultiAction sofar)
+        Just pb@(PlaceBorder al x y) -> do
+          let newitems = [SpendResources Stone 2, pb]
+          case tryTakeMultiAction agri newitems of
+            Left na -> stoneWallInteraction' na (sofar ++ newitems) latermsg
+            Right err ->
+              stoneWallInteraction' agri sofar $ unlines [latermsg,
+                                                            "Cannot "
+                                                            ++ unwords (map show newitems)
+                                                            ++ " since " ++ err ++ ", try again. " ]
 
 getAction :: Event -> Agricola -> Curses (Maybe Action)
 getAction (EventCharacter 'q')   = const $ return Nothing
@@ -250,6 +283,7 @@ getAction (EventMouse int mouseState) = \agri -> do
     Just CowsAndPigs -> return $ Just TakeCowsAndPigs
     Just HorsesAndSheep -> return $ Just TakeHorsesAndSheep
     Just BuildTroughs -> buildTroughInteraction agri
+    Just StoneWall -> stoneWallInteraction agri
     Just a -> return $ Just (SetMessage (show a ++ " not implemented"))
     Nothing -> case clickedControls (mx,my) of
       Just StopButton -> return $ Just DoNothing
