@@ -139,8 +139,8 @@ getCursorCoord = do
 
 
 
-interaction :: String -> (Agricola -> Coord -> Curses (Maybe Action))
-            -> Agricola -> Curses (Maybe Action)
+type Interaction = String -> (Agricola -> Coord -> Curses (Maybe Action)) -> Agricola -> Curses (Maybe Action)
+interaction :: Interaction
 interaction msg click agri = do
   ev <- dispMsgAtTopAndWaitForInput msg
   case ev of
@@ -152,6 +152,7 @@ interaction msg click agri = do
     _ -> return $ Just DoNothing
 
 
+placeTroughInteraction :: String -> Agricola -> Curses (Maybe Action)
 placeTroughInteraction msg = interaction msg click
   where click agri (mx,my) = case clickedTile agri (mx,my) of
           Nothing -> case clickedControls (mx,my) of
@@ -160,8 +161,8 @@ placeTroughInteraction msg = interaction msg click
             Just QuitButton -> return Nothing
             _ -> placeTroughInteraction msg agri
           Just (x,y) -> return $ Just $ PlaceTrough x y
-                                  
 
+placeBorderInteraction :: String -> Agricola -> Curses (Maybe Action)
 placeBorderInteraction msg = interaction msg click
   where click agri (mx,my) = case clickedBorder agri (mx,my) of
           Nothing -> case clickedControls (mx,my) of
@@ -200,43 +201,50 @@ freeAnimalInteraction = do
     Nothing -> return $ Just DoNothing
 
 
+
+multiActionInteraction :: [String]
+                       -> [Action]
+                       -> (String -> Agricola -> Curses (Maybe Action))
+                       -> Agricola
+                       ->   Curses (Maybe Action)
+multiActionInteraction msgs costs interaction agri
+  = multiActionInteraction' agri [] costs msgs ""
+   where
+     multiActionInteraction' agri sofar costs@(c:cs) msgs@(m:ms) err = do
+       let prob = isProblem agri c
+       if null sofar && isJust prob
+         then return $ Just (SetMessage $ "Cannot " ++ show c ++ ", since " ++ (fromJust prob))
+         else do
+         renderGame agri
+         action <- interaction (unlines [m,err]) agri
+         case action of
+           Nothing -> return $ Just DoNothing
+           Just DoNothing -> return $ Just (MultiAction sofar)
+           Just a -> do
+             let newitems = [c,a]
+             case tryTakeMultiAction agri newitems of
+               Left na -> multiActionInteraction' na (sofar ++ newitems) cs ms ""
+               Right err -> multiActionInteraction' agri sofar costs msgs $
+                                     unwords ["Cannot "
+                                              , unwords (map show newitems)
+                                              ,"since "
+                                              , err
+                                              ,", try again. "
+                                              ]
+
+
 buildTroughInteraction :: Agricola -> Curses (Maybe Action)
-buildTroughInteraction agri = buildTroughInteraction' agri [] firstmsg
+buildTroughInteraction =
+  multiActionInteraction
+  (firstmsg : repeat latermsg)
+  (StartBuildingTroughs: repeat cost )
+  placeTroughInteraction
   where
+    cost = (SpendResources Wood 3)
     firstmsg = "Click tile to place trough on tile, or stop to cancel."
-    latermsg = "Click tile to place trough on for 3 wood,"
-               ++" stop to finish or cancel to cancel."
-    buildTroughInteraction' agri [] _ = do
-      case isProblem agri StartBuildingTroughs of
-        Nothing -> do
-          action <- placeTroughInteraction firstmsg agri
-          case action of
-            Nothing -> return $ Just DoNothing
-            Just DoNothing -> return $ Just DoNothing
-            Just pt@(PlaceTrough _ _) -> do
-              let newitems = [StartBuildingTroughs, pt]
-              case tryTakeMultiAction agri newitems of
-                Left na -> buildTroughInteraction' na newitems latermsg
-                Right err ->
-                  return $ Just (SetMessage $
-                                 "Cannot build troughs, since " ++ err)
-        Just err ->
-          return $ Just (SetMessage $ "Cannot build troughs, since " ++ err)
-    buildTroughInteraction' agri sofar msg = do
-      renderGame agri
-      action <- placeTroughInteraction msg agri
-      case action of
-        Nothing -> return $ Just DoNothing
-        Just DoNothing -> return $ Just (MultiAction sofar)
-        Just pt@(PlaceTrough x y) -> do
-          let newitems = [SpendResources Wood 3, pt]
-          case tryTakeMultiAction agri newitems of
-            Left na -> buildTroughInteraction' na (sofar ++ newitems) latermsg
-            Right err ->
-              buildTroughInteraction' agri sofar $
-              unlines [latermsg, "Cannot "
-                                 ++ unwords (map show newitems)
-                                 ++ " since " ++ err ++ ", try again. " ]
+    latermsg = unwords ["Click tile to place trough on for 3 wood,"
+                       , "stop to finish or cancel to cancel."
+                       ]
 
 stoneWallInteraction :: Agricola -> Curses (Maybe Action)
 stoneWallInteraction agri = stoneWallInteraction' agri [] firstmsg
