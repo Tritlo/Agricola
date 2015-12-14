@@ -94,6 +94,10 @@ takeAction StartBuildingStall = flip (&~) $ do
   id %= takeUnitTile BuildStall
   player col . supply . goodLens Stone -= 3
   player col . supply . goodLens Reed -= 1
+takeAction (StartBuildingStable g) = flip (&~) $ do
+  col <- use whoseTurn
+  id %= takeUnitTile BuildStable
+  player col . supply . goodLens g -= 5
 takeAction DoNothing = id
 takeAction (SetMessage msg) = set message msg
 takeAction (PlaceBorder al cx cy) = placeBorder al cx cy
@@ -270,6 +274,7 @@ boardSpaceFree agri StartBuildingTroughs = isNothing (agri ^. board . buildTroug
 boardSpaceFree agri StartBuildingStoneWalls = isNothing (agri ^. board . stoneWall)
 boardSpaceFree agri StartBuildingWoodFences = isNothing (agri ^. board . woodFence)
 boardSpaceFree agri StartBuildingStall = isNothing (agri ^. board . buildStall)
+boardSpaceFree agri (StartBuildingStable g) = isNothing (agri ^. board . buildStable)
 
 
 workerActions :: [Action]
@@ -288,6 +293,7 @@ workerActions = [ TakeResources
                 , StartBuildingWoodFences
                 , StartBuildingStall
                 ]
+                ++ [StartBuildingStable g | g <- [Wood,Stone]]
 
 isProblem :: Agricola -> Action ->  Maybe String
 isProblem agri (SetMessage _) = Nothing
@@ -359,7 +365,8 @@ isProblem agri a = error $ "did not find legal for " ++ show a
 
 isResourceProblem :: Action -> Agricola -> Maybe String
 isResourceProblem StartBuildingWoodFences = resourceProblem [(Wood,1)]
-isResourceProblem StartBuildingStall = resourceProblem [(Stone,3),(Reed,1)] 
+isResourceProblem StartBuildingStall = resourceProblem [(Stone,3),(Reed,1)]
+isResourceProblem (StartBuildingStable g) = resourceProblem [(g,5)]
 isResourceProblem _ = const Nothing
 
 resourceProblem :: [(Good,Integer)] -> Agricola -> Maybe String

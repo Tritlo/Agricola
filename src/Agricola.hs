@@ -483,6 +483,7 @@ data Action = DoNothing
               | StartBuildingStoneWalls
               | StartBuildingWoodFences
               | StartBuildingStall
+              | StartBuildingStable Good
               | SetMessage String
               | MultiAction [Action]
             deriving (Eq)
@@ -516,7 +517,8 @@ instance Show Action where
   show StartBuildingWoodFences = "Start building wood fences"
   show StartBuildingStoneWalls = "Start building stone walls"
   show StartBuildingStall = "Build stall"
-
+  show (StartBuildingStable good) = "Build stable from " ++ map toLower (show good)
+  
 instance Show Building where
   show Stall = "Stall"
   show Stable = "Stable"
