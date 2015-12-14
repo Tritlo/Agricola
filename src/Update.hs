@@ -508,7 +508,7 @@ hasTrough agri (cx,cy) | agri ^. player col . farm . tile cx cy . trough = 1
   where col = agri ^. whoseTurn
 
 
-bonusScore :: Color -> Agricola -> Integer
+bonusScore ::  Color -> Agricola -> Rational
 bonusScore col agri = buildingscore + expansionscore
   where pts = agri ^. player col . farm . tiles
         builds = mapMaybe _building $ concat pts
@@ -516,14 +516,14 @@ bonusScore col agri = buildingscore + expansionscore
         expansionscore = 0
 
 
-scoreBuilding :: Agricola -> Color -> Building -> Integer
+scoreBuilding ::  Agricola -> Color -> Building -> Rational
 scoreBuilding _ _ Stall = 1
 scoreBuilding _ _ Stable = 4
 scoreBuilding _ _ Cottage = 0
 scoreBuilding _ _ HalfTimberedHouse = 5
-scoreBuilding agri col Storage =
-  sum (map (\g -> sup ^. goodLens g) [Wood, Stone, Reed]) `div` 2
+scoreBuilding agri col Storage = (fromInteger goodcount) / 2
   where sup = agri ^. player col . supply
+        goodcount = sum (map (\g -> sup ^. goodLens g) [Wood, Stone, Reed])
 scoreBuilding _ _ Shelter = 0
 scoreBuilding _ _ OpenStable = 2
 
@@ -547,11 +547,11 @@ scoreAnimal Horse n   | n >= 5  = n + 1
 scoreAnimal a n | n <= 3 = -3
 scoreAnimal a n = n
 
-animalScore :: Color -> Agricola -> Integer
-animalScore col agri =  sum [ scoreAnimal Sheep sh
-                            , scoreAnimal Pig  pi
-                            , scoreAnimal Cow co
-                            , scoreAnimal Horse ho
+animalScore :: Color -> Agricola -> Rational
+animalScore col agri = toRational $ sum [ scoreAnimal Sheep sh
+                                        , scoreAnimal Pig  pi
+                                        , scoreAnimal Cow co
+                                        , scoreAnimal Horse ho
                             ]
   where pts = agri ^. player col . farm . tiles
         ans = mapMaybe _tileanimals $ concat pts
@@ -560,7 +560,7 @@ animalScore col agri =  sum [ scoreAnimal Sheep sh
         co = sum $ map snd $ filter (\x -> fst x == Cow) ans
         ho = sum $ map snd $ filter (\x -> fst x == Horse) ans
 
-finalPlayerScore :: Color -> Agricola -> Integer
+finalPlayerScore :: Color -> Agricola -> Rational
 finalPlayerScore col agri = animalScore col agri + bonusScore col agri
 
 finalScore :: Agricola -> String
