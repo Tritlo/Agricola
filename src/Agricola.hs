@@ -244,9 +244,9 @@ resourcesOnTile BuildTroughs = []
 resourcesOnTile BuildStable = []
 resourcesOnTile SpecialBuilding = []
 resourcesOnTile Millpond =  [show Reed ++ "s", show Sheep]
-resourcesOnTile PigsAndSheep = [ show Cow ++ "s", show Sheep]
+resourcesOnTile PigsAndSheep = [ show Pig ++ "s", show Sheep]
 resourcesOnTile CowsAndPigs =  [ show Cow ++"s", show Pig ++ "s"]
-resourcesOnTile HorsesAndSheep = [show Horse, show Sheep ++"s"]
+resourcesOnTile HorsesAndSheep = [show Horse ++ "s", show Sheep]
 
 tileType :: GameBoardTile -> TileType
 tileType SmallForest = Mono

@@ -9,6 +9,7 @@ import Control.Lens
 import Control.Monad
 import Render
 import Update
+import Control.Applicative
 
 
 clickedFarm :: Agricola -> Coord -> Maybe Color
@@ -139,41 +140,40 @@ getCursorCoord = do
 
 
 
-type Interaction = String -> (Agricola -> Coord -> Curses (Maybe Action)) -> Agricola -> Curses (Maybe Action)
-interaction :: Interaction
+interaction :: String -> (Agricola -> Coord -> Curses (Maybe Action)) -> Agricola -> Curses (Maybe Action)
 interaction msg click agri = do
   ev <- dispMsgAtTopAndWaitForInput msg
   case ev of
     EventCharacter 'q' -> return Nothing
     EventCharacter 'Q' -> return Nothing
-    EventCharacter ' ' -> getCursorCoord >>= (click agri)
-    m@(EventMouse _ mouseState) -> click agri (mx,my)
+    EventCharacter ' ' -> getCursorCoord >>= checkControlsAndClick
+    m@(EventMouse _ mouseState) -> checkControlsAndClick (mx,my)
       where (mx,my,mz) = mouseCoordinates mouseState
     _ -> return $ Just DoNothing
+    where checkControlsAndClick (mx,my) = case clickedControls (mx,my) of
+            Just StopButton -> return $ Just DoNothing
+            Just EndTurnButton -> return $ Just EndTurn
+            Just CancelButton -> return Nothing
+            Just QuitButton -> return Nothing
+            _ -> click agri (mx,my)
 
 
 placeTroughInteraction :: String -> Agricola -> Curses (Maybe Action)
 placeTroughInteraction msg = interaction msg click
   where click agri (mx,my) = case clickedTile agri (mx,my) of
-          Nothing -> case clickedControls (mx,my) of
-            Just StopButton -> return $ Just DoNothing
-            Just CancelButton -> return Nothing
-            Just QuitButton -> return Nothing
-            _ -> placeTroughInteraction msg agri
+          Nothing ->  placeTroughInteraction msg agri
           Just (x,y) -> return $ Just $ PlaceTrough x y
 
 placeBorderInteraction :: String -> Agricola -> Curses (Maybe Action)
 placeBorderInteraction msg = interaction msg click
   where click agri (mx,my) = case clickedBorder agri (mx,my) of
-          Nothing -> case clickedControls (mx,my) of
-            Just StopButton -> return $ Just DoNothing
-            Just CancelButton -> return Nothing
-            Just QuitButton -> return Nothing
-            _ -> placeBorderInteraction msg agri
+          Nothing -> placeBorderInteraction msg agri
           Just (a,x,y) -> return $ Just $ PlaceBorder a x y
 
 
-takeAnimalInteraction = interaction "Choose tile to take animal from:" click
+-- return Just DoNothing on nothing
+takeAnimalInteraction agri =  (<|> Just DoNothing) <$>
+                              interaction "Choose tile to take animal from:" click agri
   where click agri (mx,my) = case clickedTile agri (mx,my) of
           Nothing -> return $ Just DoNothing
           Just (x,y) -> return $ Just $ TakeAnimal x y
@@ -182,11 +182,12 @@ takeAnimalInteraction = interaction "Choose tile to take animal from:" click
 
 placeAnimalInteraction :: Agricola -> Curses (Maybe Action)
 placeAnimalInteraction agri = do
-  ev <- dispMsgAtTopAndWaitForInput "Choose animal to place."
+  ev <- dispMsgAtTopAndWaitForInput "Choose animal to place:"
   let an = getAnimalTypeFromEvent ev
   case an of
     Nothing -> return $ Just DoNothing
-    Just a -> interaction "Choose tile to place on" click agri
+    Just a -> (<|> Just DoNothing) <$>
+              interaction "Choose tile to place on:" click agri
       where click agri (mx,my) =  case clickedTile agri (mx,my) of
               Nothing -> return $ Just DoNothing
               Just (x,y) -> return $ Just $ PlaceAnimal a x y
@@ -210,6 +211,8 @@ multiActionInteraction :: [String]
 multiActionInteraction msgs costs interaction agri
   = multiActionInteraction' agri [] costs msgs ""
    where
+     multiActionInteraction' _ sofar [] _ _ = return $ Just (MultiAction sofar)
+     multiActionInteraction' _ sofar _ [] _ = return $ Just (MultiAction sofar)
      multiActionInteraction' agri sofar costs@(c:cs) msgs@(m:ms) err = do
        let prob = isProblem agri c
        if null sofar && isJust prob
@@ -230,6 +233,7 @@ multiActionInteraction msgs costs interaction agri
          case action of
            Nothing -> return $ Just DoNothing
            Just DoNothing -> return $ Just (MultiAction sofar)
+           Just EndTurn -> return $ Just (MultiAction (sofar ++ [EndTurn]))
            Just a -> do
              let newitems = [c,a]
              case tryTakeMultiAction agri newitems of
