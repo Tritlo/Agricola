@@ -213,7 +213,8 @@ multiActionInteraction msgs costs interaction agri
      multiActionInteraction' agri sofar costs@(c:cs) msgs@(m:ms) err = do
        let prob = isProblem agri c
        if null sofar && isJust prob
-         then return $ Just (SetMessage $ "Cannot " ++ show c ++ ", since " ++ (fromJust prob))
+         then return $ Just (SetMessage $ "Cannot " ++ show c
+                             ++ ", since " ++ (fromJust prob))
          else do
          if isJust prob
            then renderGame agri
@@ -232,14 +233,9 @@ multiActionInteraction msgs costs interaction agri
              case tryTakeMultiAction agri newitems of
                Left na -> multiActionInteraction' na (sofar ++ newitems) cs ms ""
                Right err -> multiActionInteraction' agri sofar costs msgs $
-                                     unwords ["Cannot "
-                                              , show c
-                                              , "to"
-                                              , show a
-                                              ,"since "
-                                              , err
-                                              ,", try again."
-                                              ]
+                                     unwords ["Cannot " , show c , "to"
+                                              , show a ,"since " , err
+                                              ,", try again."]
 
 
 buildTroughInteraction :: Agricola -> Curses (Maybe Action)
