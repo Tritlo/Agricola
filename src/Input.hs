@@ -271,7 +271,7 @@ woodFenceInteraction :: Agricola -> Curses (Maybe Action)
 woodFenceInteraction =
   multiActionInteraction
   (firstmsg : repeat latermsg)
-  (repeat cost)
+  (StartBuildingWoodFences : repeat cost)
   placeBorderInteraction
   where
     cost = (SpendResources Wood 1)
