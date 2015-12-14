@@ -82,7 +82,10 @@ breedAnimal col an agri = agri &~ when (countAnimal agri col an >= 2)
 takeAction :: Action -> Agricola -> Agricola
 takeAction StartBuildingTroughs = takeUnitTile BuildTroughs
 takeAction StartBuildingStoneWalls = takeUnitTile StoneWall
-takeAction StartBuildingWoodFences = takeUnitTile WoodFence
+takeAction StartBuildingWoodFences = flip (&~) $ do
+  col <- use whoseTurn
+  id %= takeUnitTile WoodFence
+  player col . supply . goodLens Wood -= 1
 takeAction DoNothing = id
 takeAction (SetMessage msg) = set message msg
 takeAction (PlaceBorder al cx cy) = placeBorder al cx cy
@@ -320,9 +323,18 @@ isProblem agri action | action `elem` workerActions =
                              then return "board space occupied"
                              else if agri ^. hasPlacedWorker
                                      then return "worker already placed"
-                                     else Nothing
+                                     else isResourceProblem action agri
 isProblem agri a = error $ "did not find legal for " ++ show a
 
+
+isResourceProblem :: Action -> Agricola -> Maybe String
+isResourceProblem StartBuildingWoodFences agri =
+  if (agri ^. (player col . supply . good) < 1)
+     then return $ "Not enough " ++ show Wood
+     else Nothing
+  where col = agri ^. whoseTurn
+        good = goodLens Wood
+isResourceProblem _ _ = Nothing
 
 addAnimal a Nothing      = Just (a,1)
 addAnimal a (Just (b,n)) | a == b = Just (a,n+1)
