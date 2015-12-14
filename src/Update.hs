@@ -9,7 +9,7 @@ import Control.Monad
 import Control.Monad.State
 import Data.Maybe
 import Data.Char (toLower)
-
+import Data.List
 
 
 
@@ -479,8 +479,61 @@ hasTrough agri (cx,cy) | agri ^. player col . farm . tile cx cy . trough = 1
                        | otherwise = 0
   where col = agri ^. whoseTurn
 
+
+bonusScore :: Color -> Agricola -> Integer
+bonusScore col agri = buildingscore + expansionscore
+  where pts = agri ^. player col . farm . tiles
+        builds = mapMaybe _building $ concat pts
+        buildingscore = sum $ map (scoreBuilding agri col) builds
+        expansionscore = 0
+
+
+scoreBuilding :: Agricola -> Color -> Building -> Integer
+scoreBuilding _ _ Stall = 1
+scoreBuilding _ _ Stable = 4
+scoreBuilding _ _ Cottage = 0
+scoreBuilding _ _ HalfTimberedHouse = 5
+scoreBuilding agri col Storage =
+  sum (map (\g -> sup ^. goodLens g) [Wood, Stone, Reed]) `div` 2
+  where sup = agri ^. player col . supply
+scoreBuilding _ _ Shelter = 0
+scoreBuilding _ _ OpenStable = 2
+
+scoreAnimal :: Animal -> Integer -> Integer
+scoreAnimal Sheep n | n >= 13 =  n + (n - 13) + 3
+scoreAnimal Sheep n | n >= 11 =  n + 2
+scoreAnimal Sheep n | n >= 8 =  n + 1
+
+scoreAnimal Pig n   | n >= 11  = n + (n - 11) + 3
+scoreAnimal Pig n   | n >= 9  = n + 2
+scoreAnimal Pig n   | n >= 7  = n + 1
+
+scoreAnimal Cow n   | n >= 10 = n + (n - 10)  + 3
+scoreAnimal Cow n   | n >= 8  = n + 2
+scoreAnimal Cow n   | n >= 6  = n + 1
+
+scoreAnimal Horse n   | n >= 9 = n + (n - 9)  + 3
+scoreAnimal Horse n   | n >= 7  = n + 2
+scoreAnimal Horse n   | n >= 5  = n + 1
+
+scoreAnimal a n | n <= 3 = -3
+scoreAnimal a n = n
+
+animalScore :: Color -> Agricola -> Integer
+animalScore col agri =  sum [ scoreAnimal Sheep sh
+                            , scoreAnimal Pig  pi
+                            , scoreAnimal Cow co
+                            , scoreAnimal Horse ho
+                            ]
+  where pts = agri ^. player col . farm . tiles
+        ans = mapMaybe _tileanimals $ concat pts
+        sh = sum $ map snd $ filter (\x -> fst x == Sheep) ans
+        pi = sum $ map snd $ filter (\x -> fst x == Pig) ans
+        co = sum $ map snd $ filter (\x -> fst x == Cow) ans
+        ho = sum $ map snd $ filter (\x -> fst x == Horse) ans
+
 finalPlayerScore :: Color -> Agricola -> Integer
-finalPlayerScore _ _ = 0
+finalPlayerScore col agri = animalScore col agri + bonusScore col agri
 
 finalScore :: Agricola -> String
 finalScore agri = final

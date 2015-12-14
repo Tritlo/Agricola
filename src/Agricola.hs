@@ -52,12 +52,12 @@ instance Show Supply where
 emptySupply :: Supply
 emptySupply = Supply 0 0 0 0 emptyAnimals
 
-data Building = Stall | Stable | FarmHouse |
+data Building = Stall | Stable | Cottage |
                 HalfTimberedHouse | Storage | Shelter |
                 OpenStable
                 deriving (Eq)
-                         
-data Animal = Sheep | Pig | Cow | Horse deriving ( Eq)
+
+data Animal = Sheep | Pig | Cow | Horse deriving (Eq, Ord)
 
 animalLens :: Functor f => Animal -> (Integer -> f Integer) -> Animals -> f Animals
 animalLens Sheep = sheep
@@ -520,7 +520,7 @@ instance Show Action where
 instance Show Building where
   show Stall = "Stall"
   show Stable = "Stable"
-  show FarmHouse = "Farmhouse"
+  show Cottage = "Cottage"
   show HalfTimberedHouse = "Half Timbered House"
   show Storage = "Storage"
   show Shelter = "Shelter"
@@ -627,12 +627,11 @@ tile n m = lens (_tile n m) (_setTile n m)
 
 
 startingFarm :: Farm
-startingFarm = emptyFarm & tile 2 0 . building .~ Just FarmHouse
+startingFarm = emptyFarm & tile 2 0 . building .~ Just Cottage
 
 startingGlobalSupply :: Supply
 startingGlobalSupply = emptySupply &~ do
-  -- borders .= 8
-  borders .= 1
+  borders .= 8
   stones .= 19
   wood .= 21
   reeds .= 9
