@@ -425,14 +425,12 @@ refillBoard board = board &~ do
   cowsAndPigs %= refillAnimals
   horsesAndSheep %= refillAnimals
 
-startingBoard :: Gameboard
-startingBoard = (refillBoard . takeWorkers)  emptyBoard
-
-data Phase = WorkPhase | BreedingPhase deriving (Eq)
+data Phase = WorkPhase | BreedingPhase | Finished deriving (Eq)
 
 instance Show Phase where
   show WorkPhase = "Work phase"
   show BreedingPhase = "Breeding phase"
+  show Finished = "Game is over!"
 
 data Agricola = Agricola { _red :: Player
                          , _blue :: Player
@@ -457,7 +455,7 @@ emptyAgricola = Agricola {_red = emptyPlayer Red
                          , _whoseTurn = Red
                          , _hasPlacedWorker = False
                          , _message = ""
-                         , _phase = WorkPhase
+                         , _phase = BreedingPhase
                          }
 
 
@@ -628,6 +626,21 @@ tile n m = lens (_tile n m) (_setTile n m)
 startingFarm :: Farm
 startingFarm = emptyFarm & tile 2 0 . building .~ Just FarmHouse
 
+startingGlobalSupply :: Supply
+startingGlobalSupply = emptySupply &~ do
+  -- borders .= 8
+  borders .= 1
+  stones .= 19
+  wood .= 21
+  reeds .= 9
+  -- troughs .= 10
+  animals . sheep .= 34
+  animals . horses .= 14
+  animals . cows .= 17
+  animals . pigs .= 20
+
+
+
 player :: Color -> Lens' Agricola Player
 player Red = red
 player Blue = blue
@@ -638,13 +651,6 @@ initPlayer player = player &~ do
   (supply . borders) .= 9
   workers .= 3
   farm .= startingFarm
-
-startingState :: Agricola
-startingState = emptyAgricola &~ do
-  player Blue %=  initPlayer
-  player Red  %=  initPlayer
-  board .= startingBoard
-
 
 
 

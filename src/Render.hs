@@ -92,6 +92,7 @@ drawState agri colRed colBlue colBoard = do
 
      end <- drawBoard agri
      moveCursor (snd boardOffset - 1) (fst boardOffset)
+     drawString $ show (agri ^. global . borders) ++ " turns left. "
      drawString $ show (agri ^. phase) ++ ", "
      drawString $ show (agri ^. whoseTurn) ++ "'s turn. "
      if agri ^. hasPlacedWorker
