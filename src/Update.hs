@@ -122,69 +122,32 @@ takeAction agri EndPhase = agri &~ do
       hasPlacedWorker .= True
 
 takeAction agri TakeResources = agri &~ do
-  id %= flip takeResources (Supply 0 1 1 1 emptyAnimals)
-  board . resources .= Just (agri ^. whoseTurn)
-  subtractWorker
+  col <- use whoseTurn
+  player col . supply . wood += 1
+  player col . supply . reeds += 1
+  player col . supply . stones += 1
+  id %= takeUnitTile Resources
 
-takeAction agri TakeMillpond = agri &~ do
-  Right (rs,sh) <- use (board . millpond )
-  id %= flip takeResources (emptySupply { _animals = emptyAnimals { _sheep = sh}, _reeds = rs} )
-  board . millpond .= Left (agri ^. whoseTurn)
-  subtractWorker
 
-takeAction agri TakePigsAndSheep = agri &~ do
-  Right (ps,sh) <- use (board . pigsAndSheep )
-  id %= flip takeResources (emptySupply { _animals = emptyAnimals { _sheep = sh, _pigs = ps}})
-  board . pigsAndSheep .= Left (agri ^. whoseTurn)
-  subtractWorker
+takeAction agri TakeMillpond =
+  takeDuoTile Millpond (goodLens Reed) (animals . sheep) agri
+takeAction agri TakePigsAndSheep =
+  takeDuoTile PigsAndSheep (animals . pigs) (animals . sheep) agri
+takeAction agri TakeCowsAndPigs =
+  takeDuoTile CowsAndPigs (animals . cows) (animals . pigs) agri
+takeAction agri TakeHorsesAndSheep =
+  takeDuoTile HorsesAndSheep (animals .  horses) (animals . sheep) agri
 
-takeAction agri TakeCowsAndPigs = agri &~ do
-  Right (cs,ps) <- use (board . cowsAndPigs )
-  id %= flip takeResources (emptySupply { _animals = emptyAnimals { _cows = cs, _pigs = ps}})
-  board . cowsAndPigs .= Left (agri ^. whoseTurn)
-  subtractWorker
-
-takeAction agri TakeHorsesAndSheep = agri &~ do
-  Right (hs,sh) <- use (board . horsesAndSheep )
-  id %= flip takeResources (emptySupply { _animals = emptyAnimals { _sheep = sh, _horses = hs}})
-  board . horsesAndSheep .= Left (agri ^. whoseTurn)
-  subtractWorker
 
 takeAction agri TakeSmallForest = agri &~ do
-  Right w <- use (board . smallForest)
+  id %= takeMonoTile SmallForest Wood
   playerColor <- use whoseTurn
-  player playerColor . supply . wood += w
   starting .= playerColor
-  board . smallForest .= Left (agri ^. whoseTurn)
-  subtractWorker
 
-takeAction agri TakeBigForest = agri &~ do
-  Right w <- use (board . bigForest)
-  playerColor <- use whoseTurn
-  player playerColor . supply . wood += w
-  board . bigForest .= Left (agri ^. whoseTurn)
-  subtractWorker
+takeAction agri TakeBigForest   = takeMonoTile BigForest Wood agri
+takeAction agri TakeBigQuarry   = takeMonoTile BigQuarry Stone agri
+takeAction agri TakeSmallQuarry = takeMonoTile SmallQuarry Stone agri
 
-takeAction agri TakeSmallQuarry = agri &~ do
-  Right s <- use (board . smallQuarry)
-  playerColor <- use whoseTurn
-  player playerColor . supply . stones += s
-  board . smallQuarry .= Left (agri ^. whoseTurn)
-  subtractWorker
-
-takeAction agri TakeBigQuarry = agri &~ do
-  Right s <- use (board . bigQuarry)
-  playerColor <- use whoseTurn
-  player playerColor . supply . stones += s
-  board . bigQuarry .= Left (agri ^. whoseTurn)
-  subtractWorker
-
-takeAction agri TakeExpand = agri &~ do
-  Right b <- use (board . expand)
-  playerColor <- use whoseTurn
-  player playerColor . supply . borders += b
-  board . expand .= Left (agri ^. whoseTurn)
-  subtractWorker
 
 takeAction agri (TakeAnimal cx cy) = agri &~ do
   playerColor <- use whoseTurn
@@ -193,6 +156,28 @@ takeAction agri (TakeAnimal cx cy) = agri &~ do
   if n == 1
     then player playerColor . farm . tile cx cy .tileanimals .= Nothing
     else player playerColor . farm . tile cx cy .tileanimals .= Just (ani,n-1)
+
+takeUnitTile gbtile agri = agri &~ do
+  col <- use whoseTurn
+  board . (unitTileLens gbtile) .= Just col
+  subtractWorker
+
+takeDuoTile gbtile fspath snpath agri = agri &~ do
+  Right (fs,sn) <- use (board . duoTileLens gbtile )
+  col <- use whoseTurn
+  player col . supply . fspath += fs
+  player col . supply  . snpath += sn
+  board . duoTileLens gbtile .= Left col
+  subtractWorker
+
+
+takeMonoTile gbtile good agri = agri &~ do
+  Right r <- use (board . monoTileLens gbtile)
+  col <- use whoseTurn
+  player col . supply . goodLens good += r
+  board . monoTileLens gbtile .= Left col
+  subtractWorker
+
 
 tryTakeAction :: Agricola -> Action -> Maybe Agricola
 tryTakeAction agri (MultiAction actions) =
@@ -216,21 +201,7 @@ tryTakeMultiAction agri (a:as) = case isProblem agri a of
   Just err -> Right err
 
 update :: Agricola -> Maybe Action -> Maybe Agricola
-update agri action = do
-  act <- action
-  agri <- tryTakeAction agri act
-  return agri
-
-goodLens :: Functor f => Good -> (Integer -> f Integer) -> Supply -> f Supply
-goodLens Wood = wood
-goodLens Stone = stones
-goodLens Reed = reeds
-
-animalLens :: Functor f => Animal -> (Integer -> f Integer) -> Animals -> f Animals
-animalLens Sheep = sheep
-animalLens Pig = pigs
-animalLens Cow = cows
-animalLens Horse = horses
+update agri action = action >>= tryTakeAction agri
 
 placeAnimal :: Agricola -> Coord -> Animal -> Agricola
 placeAnimal agri (cx,cy) animal = agri &~ do

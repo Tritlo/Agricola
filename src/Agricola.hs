@@ -58,7 +58,19 @@ data Building = Stall | Stable | FarmHouse |
 
 data Animal = Sheep | Pig | Cow | Horse deriving ( Eq)
 
-data Good = Wood | Stone | Reed deriving (Eq,Show)
+animalLens :: Functor f => Animal -> (Integer -> f Integer) -> Animals -> f Animals
+animalLens Sheep = sheep
+animalLens Pig = pigs
+animalLens Cow = cows
+animalLens Horse = horses
+
+data Good = Wood | Stone | Reed | Fence deriving (Eq,Show)
+
+goodLens :: Functor f => Good -> (Integer -> f Integer) -> Supply -> f Supply
+goodLens Wood = wood
+goodLens Stone = stones
+goodLens Reed = reeds
+goodLens Fence = borders
 
 
 data Alignment = H | V deriving (Eq, Show)
