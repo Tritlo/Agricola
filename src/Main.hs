@@ -16,6 +16,7 @@ gameLoop :: Agricola -> Curses Agricola
 gameLoop agri = do
   (w,_,_,_) <- settings
   renderGame agri
+  setKeypad w True
   event <- getNextEvent w
   action <- getAction event agri
   case update agri action of

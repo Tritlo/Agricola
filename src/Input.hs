@@ -6,6 +6,7 @@ import UI.NCurses hiding (Color)
 import Data.Maybe
 import Data.Either
 import Control.Lens
+import Control.Monad
 import Render
 import Update
 
@@ -63,7 +64,6 @@ clickedControls c@(cx,cy) =
         numbs = maximum $ map length defaultControls
         longestb =  maximum $ map (maximum . map (length . show)) defaultControls
         oc@(ox,oy) = c .-. controlsOffset
-        -- t@(tn,tm) = (fromInteger $ ox `div` (vx  `div` (toInteger $ length defaultControls)), 0)
         t@(tn,tm) = (
           fromInteger $ ox `div` ((vx `div` (toInteger $ (length . head) defaultControls))),
           fromInteger $ oy `div` ((vy `div` (toInteger $ length defaultControls))))
@@ -91,87 +91,105 @@ getAnimalTypeFromEvent (EventMouse int mouseState) =
   where (mx,my,_) = mouseCoordinates mouseState
 getAnimalTypeFromEvent _ = Nothing
 
+
+
+safeMoveCursor :: Window -> Coord -> Curses ()
+safeMoveCursor w (dy,dx) = do
+  (sy,sx) <- screenSize
+  (mx,my) <- getCursorCoord
+  let (ny,nx) = (my+dy, mx+dx)
+  unless ( ny < 0 || sy <= ny || nx < 0 || sx <= nx )
+    $ updateWindow w $ (moveCursor ny nx)
+
+
 getNextEvent :: Window -> Curses Event
 getNextEvent w = do
   event <- waitFor w
   case event of
     EventMouse _ mouseState -> do
-      let (mx,my,mz) =  mouseCoordinates mouseState
+      let (mx,my,_) =  mouseCoordinates mouseState
       updateWindow w $ moveCursor my mx
+    EventSpecialKey KeyUpArrow    ->  safeMoveCursor w (-1,0)
+    EventSpecialKey KeyDownArrow  ->  safeMoveCursor w (1,0)
+    EventSpecialKey KeyLeftArrow  ->  safeMoveCursor w (0,-1)
+    EventSpecialKey KeyRightArrow ->  safeMoveCursor w (0,1)
     _ -> return  ()
   return event
 
 dispMsgAtTopAndWaitForInput :: String -> Curses Event
 dispMsgAtTopAndWaitForInput msg = do
   (w, _,_,_) <- settings
+  (mx,my) <- getCursorCoord
   updateWindow w $ do
     moveCursor 0 0
     drawString (replicate 80 ' ')
     moveCursor 1 0
     drawString (replicate 80 ' ')
     drawLines 0 2 $ lines msg
+    moveCursor my mx
   render
   getNextEvent w
 
 
+getCursorCoord :: Curses (Coord)
+getCursorCoord = do
+  (w, _,_,_) <- settings
+  (my,mx) <- getCursor w
+  return (mx,my)
 
-placeTroughInteraction :: Agricola -> String -> Curses (Maybe Action)
-placeTroughInteraction agri msg = do
+
+
+interaction :: String -> (Agricola -> Coord -> Curses (Maybe Action))
+            -> Agricola -> Curses (Maybe Action)
+interaction msg click agri = do
   ev <- dispMsgAtTopAndWaitForInput msg
   case ev of
-        EventCharacter 'q' -> return Nothing
-        EventCharacter 'Q' -> return Nothing
-        m@(EventMouse _ mouseState) -> case clickedTile agri (mx,my) of
+    EventCharacter 'q' -> return Nothing
+    EventCharacter 'Q' -> return Nothing
+    EventCharacter ' ' -> getCursorCoord >>= (click agri)
+    m@(EventMouse _ mouseState) -> click agri (mx,my)
+      where (mx,my,mz) = mouseCoordinates mouseState
+    _ -> return $ Just DoNothing
+
+
+placeTroughInteraction msg = interaction msg click
+  where click agri (mx,my) = case clickedTile agri (mx,my) of
           Nothing -> case clickedControls (mx,my) of
             Just StopButton -> return $ Just DoNothing
             Just CancelButton -> return Nothing
             Just QuitButton -> return Nothing
-            _ -> placeTroughInteraction agri msg
+            _ -> placeTroughInteraction msg agri
           Just (x,y) -> return $ Just $ PlaceTrough x y
-          where (mx,my,mz) = mouseCoordinates mouseState
-        _ -> placeTroughInteraction agri msg
+                                  
 
-placeBorderInteraction :: Agricola -> Curses (Maybe Action)
-placeBorderInteraction agri = do
-  ev <- dispMsgAtTopAndWaitForInput "Choose border to place"
-  case ev of
-    EventCharacter 'q' -> return Nothing
-    EventCharacter 'Q' -> return Nothing
-    m@(EventMouse _ mouseState) -> case clickedBorder agri (mx,my) of
-      Nothing -> case clickedControls (mx,my) of
-        Just StopButton -> return $ Just DoNothing
-        Just CancelButton -> return Nothing
-        Just QuitButton -> return Nothing
-        _ -> return $ Just DoNothing
-      Just (a, x,y) -> return $ Just $ PlaceBorder a x y
-      where (mx,my,mz) = mouseCoordinates mouseState
-    _ -> placeBorderInteraction agri
+placeBorderInteraction = interaction "Choose border to place" click
+  where click agri (mx,my) = case clickedBorder agri (mx,my) of
+          Nothing -> case clickedControls (mx,my) of
+            Just StopButton -> return $ Just DoNothing
+            Just CancelButton -> return Nothing
+            Just QuitButton -> return Nothing
+            _ -> return $ Just DoNothing
+          Just (a, x,y) -> return $ Just $ PlaceBorder a x y
 
 
-takeAnimalInteraction :: Agricola -> Curses (Maybe Action)
-takeAnimalInteraction agri = do
-  ev <- dispMsgAtTopAndWaitForInput "Choose tile to take animal from"
-  case ev of
-    m@(EventMouse _ mouseState) -> case clickedTile agri (mx,my) of
-      Nothing -> return $ Just DoNothing
-      Just (x,y) -> return $ Just $ TakeAnimal x y
-      where (mx,my,mz) = mouseCoordinates mouseState
-    _ -> return $ Just DoNothing
+takeAnimalInteraction = interaction "Choose tile to take animal from:" click
+  where click agri (mx,my) = case clickedTile agri (mx,my) of
+          Nothing -> return $ Just DoNothing
+          Just (x,y) -> return $ Just $ TakeAnimal x y
+
+
 
 placeAnimalInteraction :: Agricola -> Curses (Maybe Action)
 placeAnimalInteraction agri = do
-  ev <- dispMsgAtTopAndWaitForInput $ unwords ["Choose animal to place"]
+  ev <- dispMsgAtTopAndWaitForInput "Choose animal to place."
   let an = getAnimalTypeFromEvent ev
   case an of
     Nothing -> return $ Just DoNothing
-    Just a -> do
-      ev <- dispMsgAtTopAndWaitForInput "Choose tile to place on"
-      case ev of
-        m@(EventMouse _ mouseState) -> case clickedTile agri (mx,my) of
-          Nothing -> return $ Just DoNothing
-          Just (x,y) -> return $ Just $ PlaceAnimal a x y
-          where (mx,my,mz) = mouseCoordinates mouseState
-        _ -> return $ Just DoNothing
+    Just a -> interaction "Choose tile to place on" click agri
+      where click agri (mx,my) =  case clickedTile agri (mx,my) of
+              Nothing -> return $ Just DoNothing
+              Just (x,y) -> return $ Just $ PlaceAnimal a x y
+
 
 
 freeAnimalInteraction :: Curses (Maybe Action)
@@ -186,11 +204,12 @@ buildTroughInteraction :: Agricola -> Curses (Maybe Action)
 buildTroughInteraction agri = buildTroughInteraction' agri [] firstmsg
   where
     firstmsg = "Click tile to place trough on tile, or stop to cancel."
-    latermsg = "Click tile to place trough on for 3 wood, stop to finish or cancel to cancel."
+    latermsg = "Click tile to place trough on for 3 wood,"
+               ++" stop to finish or cancel to cancel."
     buildTroughInteraction' agri [] _ = do
       case isProblem agri StartBuildingTroughs of
         Nothing -> do
-          action <- placeTroughInteraction agri firstmsg
+          action <- placeTroughInteraction firstmsg agri
           case action of
             Nothing -> return $ Just DoNothing
             Just DoNothing -> return $ Just DoNothing
@@ -198,11 +217,14 @@ buildTroughInteraction agri = buildTroughInteraction' agri [] firstmsg
               let newitems = [StartBuildingTroughs, pt]
               case tryTakeMultiAction agri newitems of
                 Left na -> buildTroughInteraction' na newitems latermsg
-                Right err -> return $ Just (SetMessage $ "Cannot build troughs, since " ++ err)
-        Just err -> return $ Just (SetMessage $ "Cannot build troughs, since " ++ err)
+                Right err ->
+                  return $ Just (SetMessage $
+                                 "Cannot build troughs, since " ++ err)
+        Just err ->
+          return $ Just (SetMessage $ "Cannot build troughs, since " ++ err)
     buildTroughInteraction' agri sofar msg = do
       renderGame agri
-      action <- placeTroughInteraction agri msg
+      action <- placeTroughInteraction msg agri
       case action of
         Nothing -> return $ Just DoNothing
         Just DoNothing -> return $ Just (MultiAction sofar)
@@ -211,10 +233,10 @@ buildTroughInteraction agri = buildTroughInteraction' agri [] firstmsg
           case tryTakeMultiAction agri newitems of
             Left na -> buildTroughInteraction' na (sofar ++ newitems) latermsg
             Right err ->
-              buildTroughInteraction' agri sofar $ unlines [latermsg,
-                                                            "Cannot "
-                                                            ++ unwords (map show newitems)
-                                                            ++ " since " ++ err ++ ", try again. " ]
+              buildTroughInteraction' agri sofar $
+              unlines [latermsg, "Cannot "
+                                 ++ unwords (map show newitems)
+                                 ++ " since " ++ err ++ ", try again. " ]
 stoneWallInteraction :: Agricola -> Curses (Maybe Action)
 stoneWallInteraction agri = stoneWallInteraction' agri [] firstmsg
   where
@@ -249,28 +271,8 @@ stoneWallInteraction agri = stoneWallInteraction' agri [] firstmsg
                                                             ++ unwords (map show newitems)
                                                             ++ " since " ++ err ++ ", try again. " ]
 
-getAction :: Event -> Agricola -> Curses (Maybe Action)
-getAction (EventCharacter 'q')   = const $ return Nothing
-getAction (EventCharacter 'Q')   = const $ return Nothing
-getAction (EventCharacter ' ')   = const $ return $ Just  EndTurn
-getAction (EventCharacter '\n')  = const $ return $ Just EndPhase
-getAction (EventCharacter 'f')   = const $ return $ Just TakeSmallForest
-getAction (EventCharacter 'F')   = const $ return $ Just TakeBigForest
-getAction (EventCharacter 's')   = const $ return $ Just TakeSmallQuarry
-getAction (EventCharacter 'S')   = const $ return $ Just TakeBigQuarry
-getAction (EventCharacter 'e')   = const $ return $ Just TakeExpand
-getAction (EventCharacter 'm')   = const $ return $ Just TakeMillpond
-getAction (EventCharacter 'p')   = const $ return $ Just TakePigsAndSheep
-getAction (EventCharacter 'c')   = const $ return $ Just TakeCowsAndPigs
-getAction (EventCharacter 'h')   = const $ return $ Just TakeHorsesAndSheep
-getAction (EventCharacter 'r')   = const $ return $ Just TakeResources
-getAction (EventCharacter 'R')   = const freeAnimalInteraction
-getAction (EventCharacter 'a')   = placeAnimalInteraction
-getAction (EventCharacter 'A')   = takeAnimalInteraction
-getAction (EventCharacter 'b')   = placeBorderInteraction
-getAction (EventCharacter char)  = const $ return $ Just DoNothing
-getAction (EventSpecialKey key)  = const undefined
-getAction (EventMouse int mouseState) = \agri -> do
+mouseClick :: Coord -> Agricola -> Curses (Maybe Action)
+mouseClick (mx,my) agri = do
   case clickedBoard agri (mx,my) of
     Just SmallForest -> return $ Just TakeSmallForest
     Just BigForest -> return $ Just TakeBigForest
@@ -294,11 +296,40 @@ getAction (EventMouse int mouseState) = \agri -> do
       Just FreeAnimalButton -> freeAnimalInteraction
       Just QuitButton -> return Nothing
       _ -> return $ Just DoNothing
-  where (mx,my,_) = mouseCoordinates mouseState
-getAction EventResized = const $ do
+
+resized :: Curses (Maybe Action)
+resized = do
   (sx,sy) <- screenSize
   return $ Just (SetMessage ("Screen resized to" ++ show (sx,sy)))
-getAction (EventUnknown ev) = const $ return $ Just DoNothing
+
+
+
+
+getAction :: Event -> Agricola -> Curses (Maybe Action)
+getAction (EventCharacter 'q')      = const $ return Nothing
+getAction (EventCharacter 'Q')      = const $ return Nothing
+getAction (EventCharacter ' ')      = \ag -> getCursorCoord >>= (flip mouseClick ag)
+getAction (EventCharacter '\n')     = const $ return $ Just EndPhase
+getAction (EventCharacter 'f')      = const $ return $ Just TakeSmallForest
+getAction (EventCharacter 'F')      = const $ return $ Just TakeBigForest
+getAction (EventCharacter 's')      = const $ return $ Just TakeSmallQuarry
+getAction (EventCharacter 'S')      = const $ return $ Just TakeBigQuarry
+getAction (EventCharacter 'e')      = const $ return $ Just TakeExpand
+getAction (EventCharacter 'm')      = const $ return $ Just TakeMillpond
+getAction (EventCharacter 'p')      = const $ return $ Just TakePigsAndSheep
+getAction (EventCharacter 'c')      = const $ return $ Just TakeCowsAndPigs
+getAction (EventCharacter 'h')      = const $ return $ Just TakeHorsesAndSheep
+getAction (EventCharacter 'r')      = const $ return $ Just TakeResources
+getAction (EventCharacter 'R')      = const freeAnimalInteraction
+getAction (EventCharacter 'a')      = placeAnimalInteraction
+getAction (EventCharacter 'A')      = takeAnimalInteraction
+getAction (EventCharacter 'b')      = placeBorderInteraction
+getAction (EventCharacter char)     = const $ return $ Just DoNothing
+getAction (EventSpecialKey key)     = const $ return $ Just DoNothing
+getAction EventResized              = const resized
+getAction (EventUnknown ev)         = const $ return $ Just DoNothing
+getAction (EventMouse _ mouseState) = mouseClick (mx,my)
+  where (mx,my,_) = mouseCoordinates mouseState
 
 waitFor :: Window -> Curses Event
 waitFor w = loop where
