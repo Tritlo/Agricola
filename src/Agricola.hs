@@ -517,13 +517,14 @@ instance Show Action where
   show StartBuildingStall = "Build stall"
 
 instance Show Building where
-  show Stall = "Stall"
-  show Stable = "Stable"
-  show Cottage = "Cottage"
-  show HalfTimberedHouse = "Half Timbered House"
-  show Storage = "Storage"
-  show Shelter = "Shelter"
-  show OpenStable = "Open stable"
+  show Stall             = "Stall"
+  show Stable            = "Stable"
+  show Cottage           = "Cottage"
+  -- show HalfTimberedHouse = "Half Timbered House"
+  show HalfTimberedHouse = "HalfT House"
+  show Storage           = "Storage"
+  show Shelter           = "Shelter"
+  show OpenStable        = "Open stable"
 
 
 instance Show Animal where
@@ -658,18 +659,21 @@ initPlayer player = player &~ do
 
 farmOffset :: Color -> Coord
 farmOffset Red = (2,2)
-farmOffset Blue = (50,2)
+farmOffset Blue = (70,2)
 
 boardOffset :: Coord
-boardOffset = (2,26)
+boardOffset = (23,26)
 
 controlsOffset :: Coord
-controlsOffset = (2,20)
+controlsOffset = (0,20)
+
+minScreenSize :: Coord
+minScreenSize = (47,139)
 
 data Button =   StopButton
               | EndTurnButton
               | EndPhaseButton
-              | AnimalB Animal
+              | ChoiceB Animal Good Building
               | PlaceAnimalButton
               | TakeAnimalButton
               | FreeAnimalButton
@@ -682,7 +686,7 @@ instance Show Button where
   show StopButton = "Stop"
   show EndTurnButton = "End turn"
   show EndPhaseButton = "End phase"
-  show (AnimalB a) = show a
+  show (ChoiceB a g b) = show a ++ "/" ++ show g ++ "/" ++ show b
   show PlaceAnimalButton = "Place animal"
   show TakeAnimalButton = "Take animal"
   show FreeAnimalButton = "Free animal"
@@ -692,7 +696,12 @@ instance Show Button where
 
 defaultControls = [
   [StopButton, EndTurnButton, EndPhaseButton, PlaceAnimalButton, TakeAnimalButton, FreeAnimalButton]
-  ,[AnimalB Cow, AnimalB Horse, AnimalB Sheep, AnimalB Pig, CancelButton, QuitButton]]
+  ,[ ChoiceB Sheep Wood HalfTimberedHouse
+   , ChoiceB Cow Stone Storage
+   , ChoiceB Horse Reed Shelter
+   , ChoiceB Pig Fence OpenStable
+   ,  CancelButton, QuitButton]
+  ]
 
 
 farmVolume :: Agricola -> Color -> Measurements

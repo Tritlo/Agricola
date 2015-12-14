@@ -94,6 +94,7 @@ takeAction StartBuildingStall = flip (&~) $ do
   id %= takeUnitTile BuildStall
   player col . supply . goodLens Stone -= 3
   player col . supply . goodLens Reed -= 1
+
 takeAction DoNothing = id
 takeAction (SetMessage msg) = set message msg
 takeAction (PlaceBorder al cx cy) = placeBorder al cx cy
@@ -338,14 +339,21 @@ isProblem agri (SpendResources good n) =
      then Just ("you do not have enough " ++ map toLower (show good) ++ " in your supply")
      else Nothing
   where col = agri ^. whoseTurn
-isProblem agri (PlaceTrough cx cy) = if (agri ^. player col . farm . tile cx cy. trough)
-                                        then Just "because there is already a trough on that tile"
-                                        else Nothing
-                                      where col = agri ^. whoseTurn
-isProblem agri (PlaceBuilding b cx cy) = if (isJust (agri ^. player col . farm . tile cx cy. building))
-                                        then Just "because there is already a building on that tile"
-                                        else Nothing
-                                      where col = agri ^. whoseTurn
+isProblem agri (PlaceTrough cx cy) =
+  if (agri ^. player col . farm . tile cx cy. trough)
+  then Just "because there is already a trough on that tile"
+  else Nothing
+  where col = agri ^. whoseTurn
+isProblem agri (PlaceBuilding Stable cx cy) =
+  if (agri ^. player col . farm . tile cx cy. building) /= Just Stall
+  then Just "because there is no stall on that tile"
+  else Nothing
+  where col = agri ^. whoseTurn
+isProblem agri (PlaceBuilding b cx cy) =
+  if (isJust (agri ^. player col . farm . tile cx cy. building))
+  then Just "because there is already a building on that tile"
+  else Nothing
+  where col = agri ^. whoseTurn
 isProblem agri action | action `elem` workerActions =
                         if not (hasWorkers agri)
                         then return "no workers available"

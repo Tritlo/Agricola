@@ -81,13 +81,9 @@ clickedBoard agri c@(cx,cy) =
           fromInteger $ ox `div` ((vx - 1) `div` (toInteger $ (length . head) gameBoardLayout)),
           fromInteger $ oy `div` ((vy - 1) `div` (toInteger $ length gameBoardLayout)))
 
-getAnimalTypeFromEvent (EventCharacter 's') = Just Sheep
-getAnimalTypeFromEvent (EventCharacter 'p') = Just Pig
-getAnimalTypeFromEvent (EventCharacter 'c') = Just Cow
-getAnimalTypeFromEvent (EventCharacter 'h') = Just Horse
 getAnimalTypeFromEvent (EventMouse int mouseState) =
     case clickedControls (mx,my) of
-      Just (AnimalB a)  ->  Just a
+      Just (ChoiceB a _ _)  ->  Just a
       _ -> Nothing
   where (mx,my,_) = mouseCoordinates mouseState
 getAnimalTypeFromEvent _ = Nothing

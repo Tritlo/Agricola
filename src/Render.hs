@@ -118,11 +118,11 @@ renderGame agri = do
   (my,mx) <- getCursor w
   scz@(sy,sx) <- screenSize
   updateWindow w $ do
-    if (sy < 47) || (sx < 92)
+    if (sy < (fst minScreenSize)) || (sx < (snd minScreenSize))
       then do clear
               drawString $ "The current sceen size (" ++ show scz ++ ") is to small!"
               moveCursor 1 0
-              drawString "Please make sure that the screen is at least  (47, 92) by fullscreening, or shrinking font."
+              drawString $ "Please make sure that the screen is at least " ++ show minScreenSize ++" by fullscreening, or shrinking font."
       else drawState agri colRed colBlue colWhite
     setColor colWhite
     moveCursor my mx
