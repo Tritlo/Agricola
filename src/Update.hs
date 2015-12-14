@@ -328,13 +328,16 @@ isProblem agri a = error $ "did not find legal for " ++ show a
 
 
 isResourceProblem :: Action -> Agricola -> Maybe String
-isResourceProblem StartBuildingWoodFences agri =
-  if (agri ^. (player col . supply . good) < 1)
-     then return $ "Not enough " ++ show Wood
+isResourceProblem StartBuildingWoodFences = resourceProblem Wood 1
+isResourceProblem _ = const Nothing
+
+resourceProblem :: Good -> Integer -> Agricola -> Maybe String
+resourceProblem good n agri =
+  if agri ^. (player col . supply . goodLens good) < n
+     then return $ "there is not enough " ++ show good
      else Nothing
   where col = agri ^. whoseTurn
-        good = goodLens Wood
-isResourceProblem _ _ = Nothing
+
 
 addAnimal a Nothing      = Just (a,1)
 addAnimal a (Just (b,n)) | a == b = Just (a,n+1)
