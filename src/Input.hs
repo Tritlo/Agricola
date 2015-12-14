@@ -249,15 +249,19 @@ buildTroughInteraction =
 stoneWallInteraction :: Agricola -> Curses (Maybe Action)
 stoneWallInteraction =
   multiActionInteraction
-  (firstmsg : (firstmsg : repeat latermsg))
+  (firstmsg : (secondmsg : repeat latermsg))
   (StartBuildingStoneWalls : (DoNothing : repeat cost))
   placeBorderInteraction
   where
     cost = (SpendResources Stone 2)
     firstmsg = "Click on border to place, or click stop to cancel."
+    secondmsg = "Click on border to place, stop to finish or cancel to cancel." 
     latermsg = "Click on border to place for 2 stones, stop to finish or cancel to cancel."
 
 woodFenceInteraction :: Agricola -> Curses (Maybe Action)
+--woodFenceInteraction =
+--  multiActionInteraction
+--  (repeat)
 woodFenceInteraction agri = woodFenceInteraction' agri [] latermsg
   where
     firstmsg = "Click on border to place for 1 wood, or click stop to cancel"
