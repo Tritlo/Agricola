@@ -84,7 +84,14 @@ takeAction agri StartBuildingTroughs = agri &~ do
   col <- use whoseTurn
   board . buildTroughs .= Just col
   subtractWorker
-
+takeAction agri StartBuildingStoneWalls = agri &~ do
+  col <- use whoseTurn
+  board . stoneWall .= Just col
+  subtractWorker
+takeAction agri StartBuildingWoodFences = agri &~ do
+  col <- use whoseTurn
+  board . woodFence .= Just col
+  subtractWorker
 takeAction agri DoNothing = agri
 takeAction agri (SetMessage msg) = agri & message .~  msg
 takeAction agri (PlaceBorder al cx cy) = placeBorder agri al cx cy
@@ -243,7 +250,8 @@ boardSpaceFree agri TakePigsAndSheep   = isRight (agri ^. board . pigsAndSheep)
 boardSpaceFree agri TakeCowsAndPigs    = isRight (agri ^. board . cowsAndPigs)
 boardSpaceFree agri TakeHorsesAndSheep = isRight (agri ^. board . horsesAndSheep)
 boardSpaceFree agri StartBuildingTroughs = isNothing (agri ^. board . buildTroughs)
-
+boardSpaceFree agri StartBuildingStoneWalls = isNothing (agri ^. board . stoneWall)
+boardSpaceFree agri StartBuildingWoodFences = isNothing (agri ^. board . woodFence)
 
 workerActions :: [Action]
 workerActions = [ TakeResources
@@ -257,6 +265,8 @@ workerActions = [ TakeResources
                 , TakeCowsAndPigs
                 , TakeHorsesAndSheep
                 , StartBuildingTroughs
+                , StartBuildingStoneWalls
+                , StartBuildingWoodFences
                 ]
 
 isProblem :: Agricola -> Action ->  Maybe String

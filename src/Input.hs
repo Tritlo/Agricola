@@ -162,14 +162,14 @@ placeTroughInteraction msg = interaction msg click
           Just (x,y) -> return $ Just $ PlaceTrough x y
                                   
 
-placeBorderInteraction = interaction "Choose border to place" click
+placeBorderInteraction msg = interaction msg click
   where click agri (mx,my) = case clickedBorder agri (mx,my) of
           Nothing -> case clickedControls (mx,my) of
             Just StopButton -> return $ Just DoNothing
             Just CancelButton -> return Nothing
             Just QuitButton -> return Nothing
-            _ -> return $ Just DoNothing
-          Just (a, x,y) -> return $ Just $ PlaceBorder a x y
+            _ -> placeBorderInteraction msg agri
+          Just (a,x,y) -> return $ Just $ PlaceBorder a x y
 
 
 takeAnimalInteraction = interaction "Choose tile to take animal from:" click
@@ -238,7 +238,39 @@ buildTroughInteraction agri = buildTroughInteraction' agri [] firstmsg
                                  ++ unwords (map show newitems)
                                  ++ " since " ++ err ++ ", try again. " ]
 
-
+stoneWallInteraction :: Agricola -> Curses (Maybe Action)
+stoneWallInteraction agri = stoneWallInteraction' agri [] firstmsg
+  where
+    firstmsg = "Click on border to place, or click stop to cancel."
+    latermsg = "Click on border to place for 2 stones, stop to finish or cancel to cancel."
+    stoneWallInteraction' agri [] _ = do
+      case isProblem agri StartBuildingStoneWalls of
+        Nothing -> do
+          action <- placeBorderInteraction firstmsg agri
+          case action of
+            Nothing -> return $ Just DoNothing
+            Just DoNothing -> return $ Just DoNothing
+            Just pb@(PlaceBorder _ _ _) -> do
+              let newitems = [StartBuildingStoneWalls, pb]
+              case tryTakeMultiAction agri newitems of
+                Left na -> stoneWallInteraction' na newitems latermsg
+                Right err -> return $ Just (SetMessage $ "Cannot build borders, since " ++ err)
+        Just err -> return $ Just (SetMessage $ "Cannot build borders, since " ++ err)
+    stoneWallInteraction' agri sofar msg = do
+      renderGame agri
+      action <- placeBorderInteraction latermsg agri
+      case action of
+        Nothing -> return $ Just DoNothing
+        Just DoNothing -> return $ Just (MultiAction sofar)
+        Just pb@(PlaceBorder _ _ _) -> do
+          let newitems = [SpendResources Stone 2, pb]
+          case tryTakeMultiAction agri newitems of
+            Left na -> stoneWallInteraction' na (sofar ++ newitems) latermsg
+            Right err ->
+              stoneWallInteraction' agri sofar $
+              unlines [latermsg, "Cannot "
+                                ++ unwords (map show newitems)
+                                ++ " since " ++ err ++ ", try again. " ]
 
 mouseClick :: Coord -> Agricola -> Curses (Maybe Action)
 mouseClick (mx,my) agri = do
@@ -254,6 +286,7 @@ mouseClick (mx,my) agri = do
     Just CowsAndPigs -> return $ Just TakeCowsAndPigs
     Just HorsesAndSheep -> return $ Just TakeHorsesAndSheep
     Just BuildTroughs -> buildTroughInteraction agri
+    Just StoneWall -> stoneWallInteraction agri
     Just a -> return $ Just (SetMessage (show a ++ " not implemented"))
     Nothing -> case clickedControls (mx,my) of
       Just StopButton -> return $ Just DoNothing
@@ -291,7 +324,7 @@ getAction (EventCharacter 'r')      = const $ return $ Just TakeResources
 getAction (EventCharacter 'R')      = const freeAnimalInteraction
 getAction (EventCharacter 'a')      = placeAnimalInteraction
 getAction (EventCharacter 'A')      = takeAnimalInteraction
-getAction (EventCharacter 'b')      = placeBorderInteraction
+getAction (EventCharacter 'b')      = placeBorderInteraction "Choose border to place"
 getAction (EventCharacter char)     = const $ return $ Just DoNothing
 getAction (EventSpecialKey key)     = const $ return $ Just DoNothing
 getAction EventResized              = const resized
