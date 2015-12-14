@@ -170,7 +170,12 @@ placeBorderInteraction msg = interaction msg click
           Nothing -> placeBorderInteraction msg agri
           Just (a,x,y) -> return $ Just $ PlaceBorder a x y
 
-
+placeStallInteraction :: String -> Agricola -> Curses (Maybe Action)
+placeStallInteraction msg = interaction msg click
+  where click agri (mx,my) = case clickedTile agri (mx,my) of
+          Nothing -> placeStallInteraction msg agri
+          Just (x,y) -> return $ Just $ PlaceStall x y
+          
 -- return Just DoNothing on nothing
 takeAnimalInteraction agri =  (<|> Just DoNothing) <$>
                               interaction "Choose tile to take animal from:" click agri
@@ -257,6 +262,13 @@ buildTroughInteraction =
                        , "stop to finish or cancel to cancel."
                        ]
 
+buildStallInteraction :: Agricola -> Curses (Maybe Action)
+buildStallInteraction =
+  multiActionInteraction
+  ["Click tile to place stall for 3 stones and 1 reed, or stop to cancel."]
+  [StartBuildingStall]
+  placeStallInteraction
+
 stoneWallInteraction :: Agricola -> Curses (Maybe Action)
 stoneWallInteraction =
   multiActionInteraction
@@ -280,9 +292,6 @@ woodFenceInteraction =
     firstmsg = "Click on border to place for 1 wood, or click stop to cancel"
     latermsg = "Click on border to place for 1 wood, stop to finish or cancel to cancel."
 
-buildStallInteraction :: Agricola -> Curses (Maybe Action)
-buildStallInteraction = undefined
-
 mouseClick :: Coord -> Agricola -> Curses (Maybe Action)
 mouseClick (mx,my) agri = do
   case clickedBoard agri (mx,my) of
@@ -299,6 +308,7 @@ mouseClick (mx,my) agri = do
     Just BuildTroughs -> buildTroughInteraction agri
     Just StoneWall -> stoneWallInteraction agri
     Just WoodFence -> woodFenceInteraction agri
+    Just BuildStall -> buildStallInteraction agri
     Just a -> return $ Just (SetMessage (show a ++ " not implemented"))
     Nothing -> case clickedControls (mx,my) of
       Just StopButton -> return $ Just DoNothing
