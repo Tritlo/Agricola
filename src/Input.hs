@@ -247,38 +247,15 @@ buildTroughInteraction =
                        ]
 
 stoneWallInteraction :: Agricola -> Curses (Maybe Action)
-stoneWallInteraction agri = stoneWallInteraction' agri [] firstmsg
+stoneWallInteraction =
+  multiActionInteraction
+  (firstmsg : (firstmsg : repeat latermsg))
+  (StartBuildingStoneWalls : (DoNothing : repeat cost))
+  placeBorderInteraction
   where
+    cost = (SpendResources Stone 2)
     firstmsg = "Click on border to place, or click stop to cancel."
     latermsg = "Click on border to place for 2 stones, stop to finish or cancel to cancel."
-    stoneWallInteraction' agri [] _ = do
-      case isProblem agri StartBuildingStoneWalls of
-        Nothing -> do
-          action <- placeBorderInteraction firstmsg agri
-          case action of
-            Nothing -> return $ Just DoNothing
-            Just DoNothing -> return $ Just DoNothing
-            Just pb@(PlaceBorder _ _ _) -> do
-              let newitems = [StartBuildingStoneWalls, pb]
-              case tryTakeMultiAction agri newitems of
-                Left na -> stoneWallInteraction' na newitems latermsg
-                Right err -> return $ Just (SetMessage $ "Cannot build borders, since " ++ err)
-        Just err -> return $ Just (SetMessage $ "Cannot build borders, since " ++ err)
-    stoneWallInteraction' agri sofar msg = do
-      renderGame agri
-      action <- placeBorderInteraction msg agri
-      case action of
-        Nothing -> return $ Just DoNothing
-        Just DoNothing -> return $ Just (MultiAction sofar)
-        Just pb@(PlaceBorder a x y) -> do
-          let newitems = [SpendResources Stone 2, pb]
-          case tryTakeMultiAction agri newitems of
-            Left na -> stoneWallInteraction' na (sofar ++ newitems) latermsg
-            Right err ->
-              stoneWallInteraction' agri sofar $
-              unlines [latermsg, "Cannot "
-                                ++ unwords (map show newitems)
-                                ++ " since " ++ err ++ ", try again. " ]
 
 woodFenceInteraction :: Agricola -> Curses (Maybe Action)
 woodFenceInteraction agri = woodFenceInteraction' agri [] latermsg
