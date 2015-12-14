@@ -164,6 +164,8 @@ takeAction agri (TakeAnimal cx cy) = agri &~ do
     then player playerColor . farm . tile cx cy .tileanimals .= Nothing
     else player playerColor . farm . tile cx cy .tileanimals .= Just (ani,n-1)
 
+takeAction _ a = error $ "Cannot find action for " ++ show a
+
 takeUnitTile gbtile agri = agri &~ do
   col <- use whoseTurn
   board . (unitTileLens gbtile) .= Just col
