@@ -10,6 +10,7 @@ import Data.Either
 import Data.List
 import Test.QuickCheck
 import Control.Monad.State
+import Data.Char (toUpper, toLower)
 
 
 type Coord = (Integer, Integer)
@@ -57,7 +58,8 @@ data Building = Stall | Stable | FarmHouse |
 
 data Animal = Sheep | Pig | Cow | Horse deriving ( Eq)
 
-data Good = Wood | Stone | Reed deriving (Eq, Show)
+data Good = Wood | Stone | Reed deriving (Eq,Show)
+
 
 data Alignment = H | V deriving (Eq, Show)
 data Border = Border {  _alignment ::  Alignment
@@ -84,6 +86,8 @@ makeLenses ''Farm
 
 type Measurements = (Integer, Integer)
 
+capitalize "" = ""
+capitalize (s:rs) = toUpper s : map toLower rs
 
 
 farmMapHoriz :: [Border] -> [Maybe (Either Tile Border)]
@@ -168,7 +172,6 @@ data Gameboard = Gameboard {
   , _smallQuarry  :: MonoBoardTile
   , _bigQuarry    :: MonoBoardTile
   , _expand       :: MonoBoardTile
-    
   , _woodFence    :: UnitBoardTile
   , _stoneWall    :: UnitBoardTile
   , _resources    :: UnitBoardTile
@@ -216,10 +219,10 @@ data GameBoardTile =   SmallForest
 
 
 resourcesOnTile :: GameBoardTile -> [String]
-resourcesOnTile SmallForest = ["Wood"]
-resourcesOnTile BigForest = ["Wood"]
-resourcesOnTile SmallQuarry = ["Stone"]
-resourcesOnTile BigQuarry = ["Stone"]
+resourcesOnTile SmallForest = [show Wood]
+resourcesOnTile BigForest = [show Wood]
+resourcesOnTile SmallQuarry = [show Stone]
+resourcesOnTile BigQuarry = [show Stone]
 resourcesOnTile Expand = ["Fences"]
 resourcesOnTile WoodFence = []
 resourcesOnTile StoneWall = []
@@ -228,10 +231,10 @@ resourcesOnTile BuildStall = []
 resourcesOnTile BuildTroughs = []
 resourcesOnTile BuildStable = []
 resourcesOnTile SpecialBuilding = []
-resourcesOnTile Millpond = ["Reeds","Sheep"]
-resourcesOnTile PigsAndSheep = ["Pigs","Sheep"]
-resourcesOnTile CowsAndPigs = ["Cows","Pigs"]
-resourcesOnTile HorsesAndSheep = ["Horses","Sheep"]
+resourcesOnTile Millpond =  [show Reed ++ "s", show Sheep]
+resourcesOnTile PigsAndSheep = [ show Cow ++ "s", show Sheep]
+resourcesOnTile CowsAndPigs =  [ show Cow ++"s", show Pig ++ "s"]
+resourcesOnTile HorsesAndSheep = [show Horse, show Sheep ++"s"]
 
 tileType :: GameBoardTile -> TileType
 tileType SmallForest = Mono
@@ -465,6 +468,7 @@ data Action = DoNothing
               | PlaceAnimal Animal Integer Integer
               | PlaceTrough Integer Integer
               | SpendResources Good Integer
+              | StartBuildingTroughs
               | SetMessage String
               | MultiAction [Action]
             deriving (Eq)
@@ -473,8 +477,8 @@ data Action = DoNothing
 instance Show Action where
   show DoNothing = "do nothing"
   show (PlaceBorder al n m) = case al of
-    V -> "place vertical border on " ++ show n ++ ", " ++ show m
-    H -> "place horizontal border on " ++ show n ++ ", " ++ show m
+    V -> "place vertical border on (" ++ show n ++ ", " ++ show m ++ ")"
+    H -> "place horizontal border on (" ++ show n ++ ", " ++ show m ++")"
   show EndTurn = "end turn"
   show TakeResources = "take resources"
   show TakeSmallForest = "take from small forest"
@@ -487,12 +491,13 @@ instance Show Action where
   show TakeCowsAndPigs = "take from cows and pigs"
   show TakeHorsesAndSheep = "take from horses and sheep"
   show EndPhase = "end phase"
-  show (FreeAnimal a) =  "free a " ++ show a
-  show (TakeAnimal n m) = "take animal from tile " ++ show n ++", " ++ show m
-  show (PlaceAnimal a n m) = "place " ++ show a ++ " on tile " ++ show n ++", " ++ show m
-  show (PlaceTrough n m) = "place trough on tile " ++ show n ++", " ++ show m
-  show (SpendResources good n) = "spend " ++ show n ++ " of your " ++ show good
+  show (FreeAnimal a) =  "free a " ++ map toLower (show a)
+  show (TakeAnimal n m) = "take animal from tile (" ++ show n ++", " ++ show m ++ ")"
+  show (PlaceAnimal a n m) = "place " ++ map toLower (show a) ++ " on tile (" ++ show n ++", " ++ show m ++ ")"
+  show (PlaceTrough n m) = "place trough on tile (" ++ show n ++", " ++ show m ++")"
+  show (SpendResources good n) = "spend " ++ show n ++ " of your " ++  map toLower (show good)
   show (SetMessage str) = str
+  show StartBuildingTroughs = "Start building troughs"
 
 
 instance Show Building where
@@ -628,12 +633,14 @@ startingState = emptyAgricola &~ do
 
 
 farmOffset :: Color -> Coord
-farmOffset Red = (2,1)
-farmOffset Blue = (50,1)
+farmOffset Red = (2,2)
+farmOffset Blue = (50,2)
 
 boardOffset :: Coord
-boardOffset = (2,27)
+boardOffset = (2,26)
 
+controlsOffset :: Coord
+controlsOffset = (2,20)
 
 data Button =   StopButton
               | EndTurnButton
@@ -644,6 +651,7 @@ data Button =   StopButton
               | FreeAnimalButton
               | QuitButton
               | EmptyButton
+              | CancelButton
               deriving (Eq)
 
 instance Show Button where
@@ -656,13 +664,12 @@ instance Show Button where
   show FreeAnimalButton = "Free animal"
   show QuitButton = "Quit"
   show EmptyButton = ""
+  show CancelButton = "Cancel"
 
 defaultControls = [
   [StopButton, EndTurnButton, EndPhaseButton, PlaceAnimalButton, TakeAnimalButton, FreeAnimalButton]
-  ,[AnimalB Cow, AnimalB Horse, AnimalB Sheep, AnimalB Pig, EmptyButton, QuitButton]]
+  ,[AnimalB Cow, AnimalB Horse, AnimalB Sheep, AnimalB Pig, CancelButton, QuitButton]]
 
-controlsOffset :: Coord
-controlsOffset = (2,21)
 
 farmVolume :: Agricola -> Color -> Measurements
 farmVolume agri col = volume (agri ^. (player col . farm))

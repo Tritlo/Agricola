@@ -24,7 +24,7 @@ drawFarm agri col = drawLines oy ox $
 
 drawSupply :: Agricola -> Ag.Color -> Integer -> Update Integer
 drawSupply agri color start =
-  drawLines (start + 2) (fst $ farmOffset color) $
+  drawLines (start + 1) (fst $ farmOffset color) $
   lines $ show $ agri ^. (player color . supply)
 
 
@@ -114,11 +114,11 @@ renderGame agri = do
   (my,mx) <- getCursor w
   scz@(sy,sx) <- screenSize
   updateWindow w $ do
-    if (sy < 48) || (sx < 96)
+    if (sy < 47) || (sx < 92)
       then do clear
               drawString $ "The current sceen size (" ++ show scz ++ ") is to small!"
               moveCursor 1 0
-              drawString "Please make sure that the screen is at least  (48, 96)"
+              drawString "Please make sure that the screen is at least  (47, 92) by fullscreening, or shrinking font."
       else drawState agri colRed colBlue colWhite
     setColor colWhite
     moveCursor my mx

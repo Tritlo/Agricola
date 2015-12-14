@@ -7,7 +7,7 @@ import Data.Maybe
 import Data.Either
 import Control.Lens
 import Render
-import Debug.Trace
+import Update
 
 
 clickedFarm :: Agricola -> Coord -> Maybe Color
@@ -107,33 +107,44 @@ dispMsgAtTopAndWaitForInput msg = do
   updateWindow w $ do
     moveCursor 0 0
     drawString (replicate 80 ' ')
-    moveCursor 0 0
-    drawString msg
+    moveCursor 1 0
+    drawString (replicate 80 ' ')
+    drawLines 0 2 $ lines msg
   render
   getNextEvent w
 
 
 
-placeTroughInteraction :: Agricola -> Curses (Maybe Action)
-placeTroughInteraction agri = do
-  ev <- dispMsgAtTopAndWaitForInput "Choose tile to place trough on"
+placeTroughInteraction :: Agricola -> String -> Curses (Maybe Action)
+placeTroughInteraction agri msg = do
+  ev <- dispMsgAtTopAndWaitForInput msg
   case ev of
+        EventCharacter 'q' -> return Nothing
+        EventCharacter 'Q' -> return Nothing
         m@(EventMouse _ mouseState) -> case clickedTile agri (mx,my) of
-          Nothing -> return $ Just DoNothing
+          Nothing -> case clickedControls (mx,my) of
+            Just StopButton -> return $ Just DoNothing
+            Just CancelButton -> return Nothing
+            Just QuitButton -> return Nothing
+            _ -> placeTroughInteraction agri msg
           Just (x,y) -> return $ Just $ PlaceTrough x y
           where (mx,my,mz) = mouseCoordinates mouseState
-        _ -> return $ Just DoNothing
+        _ -> placeTroughInteraction agri msg
 
 placeBorderInteraction :: Agricola -> Curses (Maybe Action)
 placeBorderInteraction agri = do
   ev <- dispMsgAtTopAndWaitForInput "Choose border to place"
   case ev of
-    m@(EventMouse _ mouseState) -> case clickedBorder agri (mx,my) of
-      Nothing -> return $ Just DoNothing
-      Just (a, x,y) -> return $ Just $ PlaceBorder a x y
-      where (mx,my,mz) = mouseCoordinates mouseState
     EventCharacter 'q' -> return Nothing
     EventCharacter 'Q' -> return Nothing
+    m@(EventMouse _ mouseState) -> case clickedBorder agri (mx,my) of
+      Nothing -> case clickedControls (mx,my) of
+        Just StopButton -> return $ Just DoNothing
+        Just CancelButton -> return Nothing
+        Just QuitButton -> return Nothing
+        _ -> return $ Just DoNothing
+      Just (a, x,y) -> return $ Just $ PlaceBorder a x y
+      where (mx,my,mz) = mouseCoordinates mouseState
     _ -> placeBorderInteraction agri
 
 
@@ -170,6 +181,41 @@ freeAnimalInteraction = do
     Just a -> return $ Just $ FreeAnimal a
     Nothing -> return $ Just DoNothing
 
+
+buildTroughInteraction :: Agricola -> Curses (Maybe Action)
+buildTroughInteraction agri = buildTroughInteraction' agri [] firstmsg
+  where
+    firstmsg = "Click tile to place trough on tile, or stop to cancel."
+    latermsg = "Click tile to place trough on for 3 wood, stop to finish or cancel to cancel."
+    buildTroughInteraction' agri [] _ = do
+      case isProblem agri StartBuildingTroughs of
+        Nothing -> do
+          action <- placeTroughInteraction agri firstmsg
+          case action of
+            Nothing -> return $ Just DoNothing
+            Just DoNothing -> return $ Just DoNothing
+            Just pt@(PlaceTrough _ _) -> do
+              let newitems = [StartBuildingTroughs, pt]
+              case tryTakeMultiAction agri newitems of
+                Left na -> buildTroughInteraction' na newitems latermsg
+                Right err -> return $ Just (SetMessage $ "Cannot build troughs, since " ++ err)
+        Just err -> return $ Just (SetMessage $ "Cannot build troughs, since " ++ err)
+    buildTroughInteraction' agri sofar msg = do
+      renderGame agri
+      action <- placeTroughInteraction agri msg
+      case action of
+        Nothing -> return $ Just DoNothing
+        Just DoNothing -> return $ Just (MultiAction sofar)
+        Just pt@(PlaceTrough x y) -> do
+          let newitems = [SpendResources Wood 3, pt]
+          case tryTakeMultiAction agri newitems of
+            Left na -> buildTroughInteraction' na (sofar ++ newitems) latermsg
+            Right err ->
+              buildTroughInteraction' agri sofar $ unlines [latermsg,
+                                                            "Cannot "
+                                                            ++ unwords (map show newitems)
+                                                            ++ " since " ++ err ++ ", try again. " ]
+
 getAction :: Event -> Agricola -> Curses (Maybe Action)
 getAction (EventCharacter 'q')   = const $ return Nothing
 getAction (EventCharacter 'Q')   = const $ return Nothing
@@ -184,7 +230,6 @@ getAction (EventCharacter 'm')   = const $ return $ Just TakeMillpond
 getAction (EventCharacter 'p')   = const $ return $ Just TakePigsAndSheep
 getAction (EventCharacter 'c')   = const $ return $ Just TakeCowsAndPigs
 getAction (EventCharacter 'h')   = const $ return $ Just TakeHorsesAndSheep
-getAction (EventCharacter 't')   = placeTroughInteraction
 getAction (EventCharacter 'r')   = const $ return $ Just TakeResources
 getAction (EventCharacter 'R')   = const freeAnimalInteraction
 getAction (EventCharacter 'a')   = placeAnimalInteraction
@@ -204,6 +249,7 @@ getAction (EventMouse int mouseState) = \agri -> do
     Just PigsAndSheep -> return $ Just TakePigsAndSheep
     Just CowsAndPigs -> return $ Just TakeCowsAndPigs
     Just HorsesAndSheep -> return $ Just TakeHorsesAndSheep
+    Just BuildTroughs -> buildTroughInteraction agri
     Just a -> return $ Just (SetMessage (show a ++ " not implemented"))
     Nothing -> case clickedControls (mx,my) of
       Just StopButton -> return $ Just DoNothing

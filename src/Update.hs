@@ -4,11 +4,11 @@ module Update where
 
 import Agricola
 import UI.NCurses (Event)
-import Input
 import Control.Lens
 import Control.Monad
 import Control.Monad.State
 import Data.Maybe
+import Data.Char (toLower)
 
 placeBorder :: Agricola -> Alignment -> Integer -> Integer -> Agricola
 placeBorder agri al n m = agri &~ do
@@ -80,6 +80,11 @@ breedAnimal col an agri = agri &~ when (countAnimal agri col an >= 2)
                           (player col . supply . animals . animalLens an += 1)
 
 takeAction :: Agricola -> Action -> Agricola
+takeAction agri StartBuildingTroughs = agri &~ do
+  col <- use whoseTurn
+  board . buildTroughs .= Just col
+  subtractWorker
+
 takeAction agri DoNothing = agri
 takeAction agri (SetMessage msg) = agri & message .~  msg
 takeAction agri (PlaceBorder al cx cy) = placeBorder agri al cx cy
@@ -191,42 +196,26 @@ takeAction agri (TakeAnimal cx cy) = agri &~ do
     else player playerColor . farm . tile cx cy .tileanimals .= Just (ani,n-1)
 
 tryTakeAction :: Agricola -> Action -> Maybe Agricola
+tryTakeAction agri (MultiAction actions) =
+  case tryTakeMultiAction agri actions of
+  Left nagri -> return $ nagri & message .~ ""
+  Right err -> return $ agri & message .~ ("Cannot do all of "
+                                           ++ concatMap ((++ ", ") . show ) actions
+                                           ++ "since "  ++ err)
+
 tryTakeAction agri action =
   case isProblem agri action of
   Nothing -> let newagri = agri & message .~ "" in
     return $ takeAction newagri action
   Just err -> return $ agri & message .~ ("Cannot " ++ show action ++ ", " ++ err)
-{-
-tryTakeMultiAction :: Agricola -> [Action] -> Agricola
-tryTakeMultiAction agri [] = agri
+
+
+tryTakeMultiAction :: Agricola -> [Action] -> Either Agricola String
+tryTakeMultiAction agri [] = Left agri
 tryTakeMultiAction agri (a:as) = case isProblem agri a of
-  Nothing -> let newagri = agri & message .~ "" in
-    tryTakeMultiAction (takeAction newagri a) as
-  Just err -> agri & message .~ ("Cannot " ++ show a ++ ", " ++ err)
--}
-tryTakeActionPair :: Agricola -> Action -> Action -> Maybe Agricola
-tryTakeActionPair agri a b = case isProblem agri a of
-  Just erra -> return $ agri & message .~ ("Cannot " ++ show a ++ ", " ++ erra)
-  Nothing -> case isProblem agri b of
-    Just errb -> return $ agri & message .~ ("Cannot " ++ show b ++ ", " ++ errb)
-    Nothing -> let newagri = agri & message .~ "" in
-      let newagrib = (takeAction newagri a) & message .~ "" in
-      return $ takeAction newagrib b
-{-  
-tryBuildTroughs :: Agricola -> Agricola
-tryBuildTroughs agri = undefined
-  if not (hasWorkers agri)
-  then return $ agri & message .~ "No workers available"
-  else if not (isNothing (agri ^. board . buildTroughs))
-       then return $ agri & message .~ "board space occupied"
-       else if agri ^. hasPlacedWorker
-            then return $ agri & message .~ "Worker already placed"
-            else return agri &~ do
-                board . buildTroughs .= Just (agri ^. whoseTurn)
-                subtractWorker
-placeTroughInteraction
-tryTakeActionPair (SpendResources Wood 3) (PlaceTrough)
--}
+  Nothing ->  tryTakeMultiAction (takeAction agri a) as
+  Just err -> Right err
+
 update :: Agricola -> Maybe Action -> Maybe Agricola
 update agri action = do
   act <- action
@@ -249,7 +238,6 @@ placeAnimal agri (cx,cy) animal = agri &~ do
   colr <- use whoseTurn
   player colr . supply . animals . animalLens animal -= 1
   player colr . farm . tile cx cy . tileanimals %= addAnimal animal
-
 
 
 hasWorkers :: Agricola -> Bool
@@ -284,6 +272,7 @@ boardSpaceFree agri TakeMillpond       = isRight (agri ^. board . millpond)
 boardSpaceFree agri TakePigsAndSheep   = isRight (agri ^. board . pigsAndSheep)
 boardSpaceFree agri TakeCowsAndPigs    = isRight (agri ^. board . cowsAndPigs)
 boardSpaceFree agri TakeHorsesAndSheep = isRight (agri ^. board . horsesAndSheep)
+boardSpaceFree agri StartBuildingTroughs = isNothing (agri ^. board . buildTroughs)
 
 
 workerActions :: [Action]
@@ -297,6 +286,7 @@ workerActions = [ TakeResources
                 , TakePigsAndSheep
                 , TakeCowsAndPigs
                 , TakeHorsesAndSheep
+                , StartBuildingTroughs
                 ]
 
 isProblem :: Agricola -> Action ->  Maybe String
@@ -326,15 +316,15 @@ isProblem agri (PlaceBorder al cx cy) =
   where col = agri ^. whoseTurn
 
 isProblem agri (TakeAnimal cx cy) = if not (hasAnimals agri cx cy)
-                                    then Just "since there are no animals on the tile"
+                                    then Just "since there is no animal on that tile."
                                     else Nothing
 
                                          
 isProblem agri (PlaceAnimal ani cx cy) = if (agri ^. (player col . supply . animals . animalLens ani) == 0)
-                                            then Just "because there is no animal of that type to place"
-                                            else if not (isSameAnimal agri col c ani)
-                                                 then Just "because there is already an animal of another type there"
-                                                 else if (animalSpace agri c <= 0)
+                                         then Just $ "because there is no " ++ map toLower (show ani) ++ " to place"
+                                         else case (isSameAnimal agri col c ani) of
+                                           Just an -> Just $  "because there is already a " ++ map toLower (show an) ++ " there"
+                                           Nothing -> if animalSpace agri c <= 0
                                                       then Just "because there is not enough room there"
                                                       else Nothing
                                           where col = agri ^. whoseTurn
@@ -346,7 +336,7 @@ isProblem agri (FreeAnimal an) =
   where col = agri ^. whoseTurn
 isProblem agri (SpendResources good n) =
   if agri ^. (player col . supply . goodLens good) < n
-     then Just ("you do not have enough" ++ show good ++ " in your supply")
+     then Just ("you do not have enough " ++ map toLower (show good) ++ " in your supply")
      else Nothing
   where col = agri ^. whoseTurn
 isProblem agri (PlaceTrough cx cy) = if (agri ^. player col . farm . tile cx cy. trough)
@@ -370,10 +360,12 @@ addAnimal _ _            = error "Cannot add different animal"
 
 
 
-isSameAnimal :: Agricola -> Color -> Coord -> Animal -> Bool
+isSameAnimal :: Agricola -> Color -> Coord -> Animal -> Maybe Animal
 isSameAnimal agri colr (cx,cy) an =
   let tileAn = agri ^. player colr . farm . tile cx cy . tileanimals in
-      isNothing tileAn || (fst $ fromJust tileAn) == an
+      if (isNothing tileAn || (fst $ fromJust tileAn) == an)
+      then Nothing
+      else Just $ (fst $ fromJust tileAn)
 
 
 
