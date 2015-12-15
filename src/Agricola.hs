@@ -56,6 +56,33 @@ data Building = Stall | Stable | Cottage |
                 OpenStable
                 deriving (Eq)
 
+data GlobalSupply = GlobalSupply { _troughs :: Integer
+                                 , _stalls :: Integer
+                                 , _expansions :: Integer
+                                 , _globalBorders :: Integer
+                                 , _htHouse :: Integer
+                                 , _storage :: Integer
+                                 , _shelter :: Integer
+                                 , _openStables :: Integer
+                                 } deriving (Eq,Show)
+makeLenses ''GlobalSupply
+
+emptyGlobal :: GlobalSupply
+emptyGlobal = GlobalSupply 0 0 0 0 0 0 0 0
+
+startingGlobalSupply :: GlobalSupply
+startingGlobalSupply = GlobalSupply 10 4 4 8 1 1 1 1
+
+globalBuildingLens
+  :: Functor f =>
+     Building
+     -> (Integer -> f Integer) -> GlobalSupply -> f GlobalSupply
+globalBuildingLens HalfTimberedHouse = htHouse
+globalBuildingLens Storage = storage
+globalBuildingLens Shelter = shelter
+globalBuildingLens OpenStable = openStables
+globalBuildingLens Stall = stalls
+
 data Animal = Sheep | Pig | Cow | Horse deriving (Eq, Ord)
 
 animalLens :: Functor f => Animal -> (Integer -> f Integer) -> Animals -> f Animals
@@ -403,18 +430,19 @@ removeWorkerOfAnimals (Left _) = Right (0, 0)
 removeWorkerOfAnimals a = a
 
 
+removeWorkerOfTile :: GameBoardTile -> Gameboard -> Gameboard
+removeWorkerOfTile t b
+  | tileType t == Mono = b & monoTileLens t .~ (Right 0)
+  | tileType t == Unit = b & unitTileLens t .~ Nothing
+  | tileType t == Duo = b &  duoTileLens t .~ (Right (0,0))
+  | tileType t == Special = b & specialTileLens t .~ (Nothing, Nothing)
+
+
 takeWorkers :: Gameboard -> Gameboard
 takeWorkers board = board &~ do
-  smallForest %= removeWorkerOfSingle
-  bigForest   %= removeWorkerOfSingle
-  smallQuarry %= removeWorkerOfSingle
-  bigQuarry   %= removeWorkerOfSingle
-  expand      %= removeWorkerOfSingle
-  millpond        %= removeWorkerOfAnimals
-  pigsAndSheep    %= removeWorkerOfAnimals
-  cowsAndPigs     %= removeWorkerOfAnimals
-  horsesAndSheep  %= removeWorkerOfAnimals
-  resources      .= Nothing
+  mapM_ (\t -> id %= removeWorkerOfTile t)
+    $ concat $ gameBoardLayout
+
 
 -- Workers must have been remove prior.
 refillAnimals :: DuoBoardTile -> DuoBoardTile
@@ -443,7 +471,7 @@ instance Show Phase where
 
 data Agricola = Agricola { _red :: Player
                          , _blue :: Player
-                         , _global :: Supply
+                         , _global :: GlobalSupply
                          , _board :: Gameboard
                          , _starting :: Color
                          , _whoseTurn :: Color
@@ -458,7 +486,7 @@ makeLenses ''Agricola
 emptyAgricola :: Agricola
 emptyAgricola = Agricola {_red = emptyPlayer Red
                          , _blue = emptyPlayer Blue
-                         , _global = emptySupply
+                         , _global = emptyGlobal
                          , _board = emptyBoard
                          , _starting = Red
                          , _whoseTurn = Red
@@ -641,20 +669,6 @@ tile n m = lens (_tile n m) (_setTile n m)
 
 startingFarm :: Farm
 startingFarm = emptyFarm & tile 2 0 . building .~ Just Cottage
-
-startingGlobalSupply :: Supply
-startingGlobalSupply = emptySupply &~ do
-  borders .= 8
-  stones .= 19
-  wood .= 21
-  reeds .= 9
-  -- troughs .= 10
-  animals . sheep .= 34
-  animals . horses .= 14
-  animals . cows .= 17
-  animals . pigs .= 20
-
-
 
 player :: Color -> Lens' Agricola Player
 player Red = red

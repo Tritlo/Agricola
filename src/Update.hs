@@ -129,7 +129,7 @@ takeAction (StartBuilding Stall ) = flip (&~) $ do
   col <- use whoseTurn
   player col . supply . goodLens Stone -= 3
   player col . supply . goodLens Reed -= 1
-  
+
 takeAction (SpendResources good n) = flip (&~) $ do
   col <- use whoseTurn
   player col . supply . goodLens good -= n
@@ -137,9 +137,14 @@ takeAction (SpendResources good n) = flip (&~) $ do
 takeAction (PlaceTrough cx cy) = flip (&~) $ do
   col <- use whoseTurn
   player col . farm . tile cx cy . trough .= True
+  global . troughs -= 1
 takeAction (PlaceBuilding b cx cy) = flip (&~) $ do
   col <- use whoseTurn
   player col . farm . tile cx cy . building .= Just b
+  when (((isSpecialBuilding b) || b == Stall)) $ do
+      global . globalBuildingLens b -= 1
+      when (b == OpenStable) $ do
+        global . stalls += 1
 takeAction (FreeAnimal an) = flip (&~) $ do
   col <- use whoseTurn
   player col . supply . animals . animalLens an -= 1
@@ -154,7 +159,7 @@ takeAction EndPhase = flip (&~) $ do
   starter <- use starting
   case curphase of
     BreedingPhase -> do
-        bordsleft <- use (global . borders)
+        bordsleft <- use (global . globalBorders)
         agri <- use id
         hasPlacedWorker .= False
         if bordsleft == 0
@@ -166,7 +171,7 @@ takeAction EndPhase = flip (&~) $ do
             do whoseTurn .= starter
                red . workers .= 3
                blue . workers .= 3
-               global . borders -= 1
+               global . globalBorders -= 1
                board %= takeWorkers
                board %= refillBoard
                phase .= WorkPhase
@@ -200,7 +205,10 @@ takeAction TakeSmallForest = flip (&~) $ do
 takeAction TakeBigForest   = takeMonoTile BigForest Wood
 takeAction TakeBigQuarry   = takeMonoTile BigQuarry Stone
 takeAction TakeSmallQuarry = takeMonoTile SmallQuarry Stone
+--takeAction (PlaceExpand side)
+-- taka expand úr global supply
 takeAction TakeExpand = takeMonoTile Expand Fence
+
 
 
 takeAction (TakeAnimal cx cy) = flip (&~) $ do
@@ -386,7 +394,10 @@ isProblem agri (SpendResources good n) =
 isProblem agri (PlaceTrough cx cy) =
   if (agri ^. player col . farm . tile cx cy. trough)
   then Just "there is already a trough on that tile"
-  else Nothing
+  else
+    if (agri ^. global . troughs <= 0)
+    then Just "there are no troughs left in the game components"
+    else Nothing
   where col = agri ^. whoseTurn
 isProblem agri (PlaceBuilding Stable cx cy) =
   if (agri ^. player col . farm . tile cx cy. building) /= Just Stall
@@ -419,31 +430,6 @@ isProblem agri action | action `elem` workerActions =
 isProblem agri a = error $ "did not find legal for " ++ show a
 
 
-playerHasBuilding ::  Building -> Agricola -> Color -> Bool
-playerHasBuilding b agri col  = b `elem` builds
-  where pts = agri ^. player col . farm . tiles
-        builds = mapMaybe _building $ concat pts
-
-
-buildingAlreadyBuilt :: Building -> Agricola -> Maybe String
-buildingAlreadyBuilt b agri | playerHasBuilding b agri Red =
-                              Just $ show Red ++ " already has that building"
-buildingAlreadyBuilt b agri | playerHasBuilding b agri Blue =
-                              Just $ show Blue ++ " already has that building"
-buildingAlreadyBuilt _ _ = Nothing                              
-
-
-specialBuildingResourceProblem :: Building -> Maybe Good -> Agricola -> Maybe String
-specialBuildingResourceProblem b g  agri = case buildingAlreadyBuilt b agri of
-  Just err -> Just err
-  Nothing -> case b of
-    HalfTimberedHouse -> resourceProblem [(Wood, 3), (Stone, 2), (Reed,1)] agri
-    Storage -> resourceProblem [(Wood, 2), (Reed,1)] agri
-    Shelter -> resourceProblem [(Wood, 2), (Stone,1)] agri
-    OpenStable -> resourceProblem [(fromJust  g,3)] agri
-    Stall -> resourceProblem [(Stone,3),(Reed,1)] agri
-    Stable -> resourceProblem [(fromJust g, 5)] agri
-
 buildingResourceProblem :: Building -> Agricola -> Maybe String
 buildingResourceProblem HalfTimberedHouse agri =
   resourceProblem [(Wood, 3), (Stone, 2), (Reed,1)] agri
@@ -470,12 +456,17 @@ isSpecialBuilding Shelter = True
 isSpecialBuilding OpenStable = True
 isSpecialBuilding _ = False
 
+isInSupply :: Building -> Agricola -> Maybe String
+isInSupply Stable agri = Nothing
+isInSupply b agri =
+  if (agri ^. global . globalBuildingLens b ) <= 0
+  then Just $ "all available " ++ show b ++ " have been built already"
+  else Nothing
+
 isResourceProblem :: Action -> Agricola -> Maybe String
 isResourceProblem StartBuildingWoodFences = resourceProblem [(Wood,1)]
-isResourceProblem (StartBuilding b) | isSpecialBuilding b = \agri ->
-    buildingAlreadyBuilt b agri <|> buildingResourceProblem b agri
-isResourceProblem (StartBuilding b) = buildingResourceProblem b
-  
+isResourceProblem (StartBuilding b) = \agri ->
+  isInSupply b agri <|> buildingResourceProblem b agri
 isResourceProblem _ = const Nothing
 
 resourceProblem :: [(Good,Integer)] -> Agricola -> Maybe String
