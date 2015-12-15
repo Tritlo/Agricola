@@ -10,7 +10,8 @@ import Control.Monad
 import Render
 import Update
 import Control.Applicative
-
+import Control.Monad.Except
+import Control.Monad.Trans.Maybe
 
 clickedFarm :: Agricola -> Coord -> Maybe Color
 clickedFarm agri  coord | inBox coord (farmOffset Blue) (farmVolume agri Blue) = Just Blue
@@ -171,7 +172,7 @@ placeBuildingInteraction b msg = interaction msg click
   where click agri (mx,my) = case clickedTile agri (mx,my) of
           Nothing -> placeBuildingInteraction b msg agri
           Just (x,y) -> return $ Just $ PlaceBuilding b x y
-          
+
 -- return Just DoNothing on nothing
 takeAnimalInteraction agri =  (<|> Just DoNothing) <$>
                               interaction "Choose tile to take animal from:" click agri
@@ -179,7 +180,24 @@ takeAnimalInteraction agri =  (<|> Just DoNothing) <$>
           Nothing -> return $ Just DoNothing
           Just (x,y) -> return $ Just $ TakeAnimal x y
 
+chooseResourceInteraction :: Integer -> [Good] ->  String -> Agricola -> Curses (Maybe Action)
+chooseResourceInteraction n choices msg = interaction msg click
+  where click agri (mx,my) = case clickedControls (mx,my) of
+          Just (ChoiceB _ r _) | r `elem` choices -> return $ Just $ (SpendResources r n)
+          _ -> chooseResourceInteraction n choices msg agri
 
+
+chooseAnimalInteraction :: [Animal] ->  String -> Agricola -> Curses (Maybe Action)
+chooseAnimalInteraction choices msg = interaction msg click
+  where click agri (mx,my) = case clickedControls (mx,my) of
+          Just (ChoiceB a _ _) | a `elem` choices -> return $ Just $ (ChooseAnimal a)
+          _ -> chooseAnimalInteraction choices msg agri
+
+chooseBuildingInteraction :: String -> Agricola -> Curses (Maybe Action)
+chooseBuildingInteraction msg = interaction msg click
+  where click agri (mx,my) = case clickedControls (mx,my) of
+          Just (ChoiceB _ _ b) -> return $ Just $ StartBuilding b
+          _ -> chooseBuildingInteraction msg agri
 
 placeAnimalInteraction :: Agricola -> Curses (Maybe Action)
 placeAnimalInteraction agri = do
@@ -195,6 +213,7 @@ placeAnimalInteraction agri = do
 
 
 
+
 freeAnimalInteraction :: Curses (Maybe Action)
 freeAnimalInteraction = do
   ev <- dispMsgAtTopAndWaitForInput $ unwords ["Choose animal to free"]
@@ -203,18 +222,20 @@ freeAnimalInteraction = do
     Nothing -> return $ Just DoNothing
 
 
+type Interaction = String -> Agricola -> Curses (Maybe Action)
 
 multiActionInteraction :: [String]
                        -> [Action]
-                       -> (String -> Agricola -> Curses (Maybe Action))
+                       -> [Interaction]
                        -> Agricola
                        ->   Curses (Maybe Action)
-multiActionInteraction msgs costs interaction agri
-  = multiActionInteraction' agri [] costs msgs ""
+multiActionInteraction msgs costs interactions agri
+  = multiActionInteraction' agri [] interactions costs msgs ""
    where
-     multiActionInteraction' _ sofar [] _ _ = return $ Just (MultiAction sofar)
-     multiActionInteraction' _ sofar _ [] _ = return $ Just (MultiAction sofar)
-     multiActionInteraction' agri sofar costs@(c:cs) msgs@(m:ms) err = do
+     multiActionInteraction' :: Agricola -> [Action] -> [Interaction] -> [Action]
+                             -> [String] -> String -> Curses (Maybe Action)
+     multiActionInteraction' _ sofar ins cs ms _ | null ins || null cs || null ms = return $ Just (MultiAction sofar)
+     multiActionInteraction' agri sofar interactions@(inter:inters) costs@(c:cs) msgs@(m:ms) err = do
        let prob = isProblem agri c
        if null sofar && isJust prob
          then return $ Just (SetMessage $ "Cannot " ++ show c
@@ -230,7 +251,7 @@ multiActionInteraction msgs costs interaction agri
                            ++ fromJust prob
                            ++ ". Press stop to finish or cancel to cancel."
                       else err
-         action <- interaction (unlines [m,errtop]) agri
+         action <- inter (unlines [m,errtop]) agri
          case action of
            Nothing -> return $ Just DoNothing
            Just DoNothing -> return $ Just (MultiAction sofar)
@@ -238,11 +259,13 @@ multiActionInteraction msgs costs interaction agri
            Just a -> do
              let newitems = [c,a]
              case tryTakeMultiAction agri newitems of
-               Left na -> multiActionInteraction' na (sofar ++ newitems) cs ms ""
-               Right err -> multiActionInteraction' agri sofar costs msgs $
+               Left na -> multiActionInteraction' na (sofar ++ newitems) inters cs ms ""
+               Right err -> multiActionInteraction' agri sofar interactions costs msgs $
                                      unwords ["Cannot " , show c , "to"
                                               , show a ,"since " , err
                                               ,", try again."]
+
+
 
 
 buildTroughInteraction :: Agricola -> Curses (Maybe Action)
@@ -250,7 +273,7 @@ buildTroughInteraction =
   multiActionInteraction
   (firstmsg : repeat latermsg)
   (StartBuildingTroughs: repeat cost )
-  placeTroughInteraction
+  (repeat placeTroughInteraction)
   where
     cost = (SpendResources Wood 3)
     firstmsg = "Click tile to place trough on tile, or stop to cancel."
@@ -262,15 +285,85 @@ buildStallInteraction :: Agricola -> Curses (Maybe Action)
 buildStallInteraction =
   multiActionInteraction
   ["Click tile to place stall for 3 stones and 1 reed, or stop to cancel."]
-  [StartBuildingStall]
-  (placeBuildingInteraction Stall)
+  [StartBuilding Stall]
+  [placeBuildingInteraction Stall]
+
+
+
+type ActionM = MaybeT Curses
+
+buildSpecialBuildingInteraction' :: Agricola -> ActionM Action
+buildSpecialBuildingInteraction' agri =
+  if not (hasWorkers agri && boardSpaceFree agri (StartBuilding Shelter))
+     then return $ SetMessage
+          "Cannot build special building, since no worker can be placed on gameboard tile."
+     else do
+  Just sb@(StartBuilding b) <- lift $ chooseBuildingInteraction chbuild agri
+  Just pb <- lift $ placeBuildingInteraction b (cht b) agri
+  case b of
+    OpenStable -> do
+      Just spendR <- lift $ chooseResourceInteraction 3 [Stone, Wood] chmat agri
+      Just an <- lift $ chooseAnimalInteraction [Cow,Horse] chan agri
+      return $ (MultiAction [spendR, sb, pb, an])
+    Shelter -> do
+      Just an <- lift $ chooseAnimalInteraction [Cow,Horse, Sheep, Pig] chan agri
+      return $ MultiAction [sb, pb, an]
+    _ -> return $ MultiAction [sb, pb]
+  where chbuild = "Choose special building to build:"
+        chmat = "Choose building material to build with:"
+        chan = "Choose animal to get for free:"
+        cht b = "Choose tile to place " ++ show b ++ " on:"
+
+
+-- buildSpecialBuildingInteraction :: Agricola -> Curses (Maybe Action)
+-- buildSpecialBuildingInteraction agri = do
+--   if (hasWorkers agri &&  boardSpaceFree agri (StartBuilding Shelter))
+--     then
+--       do
+--         cho <- chooseBuildingInteraction "Choose a special building to build." agri
+--         case cho of
+--           Just sb@(StartBuilding b) -> do
+--             let prob = isProblem agri sb
+--             case prob of
+--               Just err -> return $ Just (SetMessage $ concat ["Cannot " , show sb , ", since " , err , "."])
+--               Nothing -> do
+--                   pb <- placeBuildingInteraction b ("Choose tile to place " ++ show b ++ " on:") agri
+--                   case pb of
+--                     Nothing -> return $ Just DoNothing
+--                     Just pb -> case b of
+--                       OpenStable -> do
+--                         mbres <- chooseResourceInteraction 3 [Stone, Wood] "Choose building material for open stable." agri
+--                         case mbres of
+--                           Just spendr -> do
+--                             an <- chooseAnimalInteraction [Cow,Horse] ("Choose animal to get:") agri
+--                             case an of
+--                               Just geta -> return $ Just (MultiAction [spendr, sb,pb,geta])
+--                               Nothing -> return $ Just DoNothing
+--                           Nothing -> return $ Just DoNothing
+--                       Shelter -> do
+--                         an <- chooseAnimalInteraction [Cow,Horse,Sheep,Pig] ("Choose animal to get:") agri
+--                         case an of
+--                           Just geta -> return $ Just $ MultiAction [sb,pb,geta]
+--                           Nothing -> return $ Just DoNothing
+--                       _ -> return $ Just  (MultiAction [sb, pb])
+--           _ -> return $ Just DoNothing
+--     else return $ Just (SetMessage "Cannot build a special building, since you cannot put a worker on the gameboard tile.")
+
+
+buildStableInteraction :: Agricola -> Curses (Maybe Action)
+buildStableInteraction =
+  multiActionInteraction
+  (cycle ["Choose whether to build from stone or wood. stop to stop or cancel to cancel."
+         , "Click tile to place stable for 5 of the chosen good, or stop to cancel."])
+  (StartBuilding Stable : repeat DoNothing)
+  (cycle  [chooseResourceInteraction 5 [Stone,Wood], placeBuildingInteraction Stable])
 
 stoneWallInteraction :: Agricola -> Curses (Maybe Action)
 stoneWallInteraction =
   multiActionInteraction
   (firstmsg : (secondmsg : repeat latermsg))
   (StartBuildingStoneWalls : (DoNothing : repeat cost))
-  placeBorderInteraction
+  (repeat placeBorderInteraction)
   where
     cost = (SpendResources Stone 2)
     firstmsg = "Click on border to place, or click stop to cancel."
@@ -282,14 +375,13 @@ woodFenceInteraction =
   multiActionInteraction
   (firstmsg : repeat latermsg)
   (StartBuildingWoodFences : repeat cost)
-  placeBorderInteraction
+  (repeat placeBorderInteraction)
   where
     cost = (SpendResources Wood 1)
     firstmsg = "Click on border to place for 1 wood, or click stop to cancel"
     latermsg = "Click on border to place for 1 wood, stop to finish or cancel to cancel."
 
 mouseClick :: Coord -> Agricola -> Curses (Maybe Action)
-
 mouseClick (mx,my) agri =
   case clickedControls (mx,my) of
     Just QuitButton -> return Nothing
@@ -317,7 +409,8 @@ mouseClick (mx,my) agri =
       Just StoneWall -> stoneWallInteraction agri
       Just WoodFence -> woodFenceInteraction agri
       Just BuildStall -> buildStallInteraction agri
-      Just a -> return $ Just (SetMessage (show a ++ " not implemented"))
+      Just BuildStable -> buildStableInteraction agri
+      Just SpecialBuilding -> (<|> Just DoNothing) <$> (runMaybeT $ buildSpecialBuildingInteraction' agri)
       Nothing -> return $ Just DoNothing
     _ -> return $ Just DoNothing
     where isSomeonesTurn = agri ^. whoseTurn /= No
@@ -335,16 +428,9 @@ getAction (EventCharacter 'q')      = const $ return Nothing
 getAction (EventCharacter 'Q')      = const $ return Nothing
 getAction (EventCharacter ' ')      = \ag -> getCursorCoord >>= (flip mouseClick ag)
 getAction (EventCharacter '\n')     = const $ return $ Just EndTurn
-getAction (EventCharacter 'f')      = const $ return $ Just TakeSmallForest
-getAction (EventCharacter 'F')      = const $ return $ Just TakeBigForest
-getAction (EventCharacter 's')      = const $ return $ Just TakeSmallQuarry
-getAction (EventCharacter 'S')      = const $ return $ Just TakeBigQuarry
-getAction (EventCharacter 'e')      = const $ return $ Just TakeExpand
-getAction (EventCharacter 'm')      = const $ return $ Just TakeMillpond
-getAction (EventCharacter 'p')      = const $ return $ Just TakePigsAndSheep
-getAction (EventCharacter 'c')      = const $ return $ Just TakeCowsAndPigs
-getAction (EventCharacter 'h')      = const $ return $ Just TakeHorsesAndSheep
-getAction (EventCharacter 'r')      = const $ return $ Just TakeResources
+getAction (EventCharacter 's')      = const $ return $ Just (SpendResources Stone $ -1)
+getAction (EventCharacter 'w')      = const $ return $ Just (SpendResources Wood $ -1)
+getAction (EventCharacter 'r')      = const $ return $ Just (SpendResources Reed $ -1)
 getAction (EventCharacter 'b')      = placeBorderInteraction "Choose border to place"
 getAction (EventCharacter char)     = const $ return $ Just DoNothing
 getAction (EventSpecialKey key)     = const $ return $ Just DoNothing

@@ -10,6 +10,7 @@ import Control.Monad.State
 import Data.Maybe
 import Data.Char (toLower)
 import Data.List
+import Control.Applicative
 
 
 
@@ -83,25 +84,52 @@ breedAnimal col an agri = agri &~ when (countAnimal agri col an >= 2)
                           (player col . supply . animals . animalLens an += 1)
 
 takeAction :: Action -> Agricola -> Agricola
+takeAction (ChooseAnimal a) = flip (&~) $ do
+  col <- use whoseTurn
+  (player col . supply . animals . animalLens a) += 1
+  
 takeAction StartBuildingTroughs = takeUnitTile BuildTroughs
 takeAction StartBuildingStoneWalls = takeUnitTile StoneWall
 takeAction StartBuildingWoodFences = flip (&~) $ do
   col <- use whoseTurn
   id %= takeUnitTile WoodFence
   player col . supply . goodLens Wood -= 1
-takeAction StartBuildingStall = flip (&~) $ do
-  col <- use whoseTurn
-  id %= takeUnitTile BuildStall
-  player col . supply . goodLens Stone -= 3
-  player col . supply . goodLens Reed -= 1
-takeAction (StartBuildingStable g) = flip (&~) $ do
-  col <- use whoseTurn
-  id %= takeUnitTile BuildStable
-  player col . supply . goodLens g -= 5
+  
 takeAction DoNothing = id
 takeAction (SetMessage msg) = set message msg
 takeAction (PlaceBorder al cx cy) = placeBorder al cx cy
 takeAction (PlaceAnimal ani cx cy) = placeAnimal (cx,cy) ani
+takeAction (StartBuilding HalfTimberedHouse ) = flip (&~) $ do
+  id %= takeSpecialTile SpecialBuilding
+  col <- use whoseTurn
+  player col . supply . goodLens Stone -= 2
+  player col . supply . goodLens Reed -= 1
+  player col . supply . goodLens Wood -= 3
+
+takeAction (StartBuilding Storage ) = flip (&~) $ do
+  id %= takeSpecialTile SpecialBuilding
+  col <- use whoseTurn
+  player col . supply . goodLens Wood -= 2
+  player col . supply . goodLens Reed -= 1
+
+takeAction (StartBuilding Shelter ) = flip (&~) $ do
+  id %= takeSpecialTile SpecialBuilding
+  col <- use whoseTurn
+  player col . supply . goodLens Stone -= 1
+  player col . supply . goodLens Wood -= 2
+
+takeAction (StartBuilding OpenStable ) = flip (&~) $ do
+  id %= takeSpecialTile SpecialBuilding
+  
+takeAction (StartBuilding Stable ) = flip (&~) $ do
+  id %= takeUnitTile BuildStable
+
+takeAction (StartBuilding Stall ) = flip (&~) $ do
+  id %= takeUnitTile BuildStall
+  col <- use whoseTurn
+  player col . supply . goodLens Stone -= 3
+  player col . supply . goodLens Reed -= 1
+  
 takeAction (SpendResources good n) = flip (&~) $ do
   col <- use whoseTurn
   player col . supply . goodLens good -= n
@@ -198,7 +226,6 @@ takeDuoTile gbtile fspath snpath agri = agri &~ do
   board . duoTileLens gbtile .= Left col
   subtractWorker
 
-
 takeMonoTile gbtile good agri = agri &~ do
   Right r <- use (board . monoTileLens gbtile)
   col <- use whoseTurn
@@ -206,6 +233,13 @@ takeMonoTile gbtile good agri = agri &~ do
   board . monoTileLens gbtile .= Left col
   subtractWorker
 
+takeSpecialTile gbtile agri = agri &~ do
+  (a,Nothing) <- use (board . specialTileLens gbtile)
+  col <- use whoseTurn
+  case a of
+    Just c -> board . specialTileLens gbtile .= (Just c, Just col)
+    Nothing -> board . specialTileLens gbtile .= (Just col,Nothing)
+  subtractWorker
 
 tryTakeAction :: Agricola -> Action -> Maybe Agricola
 tryTakeAction agri (MultiAction actions) =
@@ -273,8 +307,12 @@ boardSpaceFree agri TakeHorsesAndSheep = isRight (agri ^. board . horsesAndSheep
 boardSpaceFree agri StartBuildingTroughs = isNothing (agri ^. board . buildTroughs)
 boardSpaceFree agri StartBuildingStoneWalls = isNothing (agri ^. board . stoneWall)
 boardSpaceFree agri StartBuildingWoodFences = isNothing (agri ^. board . woodFence)
-boardSpaceFree agri StartBuildingStall = isNothing (agri ^. board . buildStall)
-boardSpaceFree agri (StartBuildingStable g) = isNothing (agri ^. board . buildStable)
+boardSpaceFree agri (StartBuilding Stall) = isNothing (agri ^. board . buildStall)
+boardSpaceFree agri (StartBuilding Stable) = isNothing (agri ^. board . buildStable)
+boardSpaceFree agri (StartBuilding b ) | isSpecialBuilding b =
+  case agri ^. board . specialBuilding of
+  (Just _, Just _) -> False
+  _ -> True
 
 
 workerActions :: [Action]
@@ -291,12 +329,13 @@ workerActions = [ TakeResources
                 , StartBuildingTroughs
                 , StartBuildingStoneWalls
                 , StartBuildingWoodFences
-                , StartBuildingStall
                 ]
-                ++ [StartBuildingStable g | g <- [Wood,Stone]]
+                ++ [StartBuilding b
+                   | b <- [Stable, OpenStable, HalfTimberedHouse , Storage , Shelter, Stall]]
 
 isProblem :: Agricola -> Action ->  Maybe String
 isProblem agri (SetMessage _) = Nothing
+isProblem agri (ChooseAnimal _) = Nothing
 isProblem agri EndTurn = if hasWorkers agri && not (agri ^. hasPlacedWorker)
                          then Just $ show col ++ " has to place worker"
                          else if hasAnimalsInSupply agri
@@ -317,20 +356,20 @@ isProblem agri (PlaceBorder al cx cy) =
   if hasBorders agri col 
      then if freeSpace agri col al cx cy
           then Nothing
-          else Just "because there is already a border there"
-     else Just "because you don't have enough borders"
+          else Just "there is already a border there"
+     else Just "you don't have enough borders"
   where col = agri ^. whoseTurn
 
 isProblem agri (TakeAnimal cx cy) = if not (hasAnimals agri cx cy)
-                                    then Just "since there is no animal on that tile."
+                                    then Just "there is no animal on that tile."
                                     else Nothing
 
 isProblem agri (PlaceAnimal ani cx cy) = if (agri ^. (player col . supply . animals . animalLens ani) == 0)
-                                         then Just $ "because there is no " ++ map toLower (show ani) ++ " to place"
+                                         then Just $ "there is no " ++ map toLower (show ani) ++ " to place"
                                          else case (isSameAnimal agri col c ani) of
-                                           Just an -> Just $  "because there is already a " ++ map toLower (show an) ++ " there"
+                                           Just an -> Just $  "there is already a " ++ map toLower (show an) ++ " there"
                                            Nothing -> if animalSpace agri c <= 0
-                                                      then Just "because there is not enough room there"
+                                                      then Just "there is not enough room there"
                                                       else Nothing
                                           where col = agri ^. whoseTurn
                                                 c = (cx,cy)
@@ -346,17 +385,27 @@ isProblem agri (SpendResources good n) =
   where col = agri ^. whoseTurn
 isProblem agri (PlaceTrough cx cy) =
   if (agri ^. player col . farm . tile cx cy. trough)
-  then Just "because there is already a trough on that tile"
+  then Just "there is already a trough on that tile"
   else Nothing
   where col = agri ^. whoseTurn
 isProblem agri (PlaceBuilding Stable cx cy) =
   if (agri ^. player col . farm . tile cx cy. building) /= Just Stall
-  then Just "because there is no stall on that tile"
+  then Just "there is no stall on that tile"
+  else Nothing
+  where col = agri ^. whoseTurn
+isProblem agri (PlaceBuilding OpenStable cx cy) =
+  if (agri ^. player col . farm . tile cx cy. building) /= Just Stall
+  then Just "there is no stall there"
+  else Nothing
+  where col = agri ^. whoseTurn
+isProblem agri (PlaceBuilding HalfTimberedHouse cx cy) =
+  if (agri ^. player col . farm . tile cx cy. building) /= Just Cottage
+  then Just "there is no cottage there "
   else Nothing
   where col = agri ^. whoseTurn
 isProblem agri (PlaceBuilding b cx cy) =
   if (isJust (agri ^. player col . farm . tile cx cy. building))
-  then Just "because there is already a building on that tile"
+  then Just "there is already a building on that tile"
   else Nothing
   where col = agri ^. whoseTurn
 isProblem agri action | action `elem` workerActions =
@@ -370,10 +419,63 @@ isProblem agri action | action `elem` workerActions =
 isProblem agri a = error $ "did not find legal for " ++ show a
 
 
+playerHasBuilding ::  Building -> Agricola -> Color -> Bool
+playerHasBuilding b agri col  = b `elem` builds
+  where pts = agri ^. player col . farm . tiles
+        builds = mapMaybe _building $ concat pts
+
+
+buildingAlreadyBuilt :: Building -> Agricola -> Maybe String
+buildingAlreadyBuilt b agri | playerHasBuilding b agri Red =
+                              Just $ show Red ++ " already has that building"
+buildingAlreadyBuilt b agri | playerHasBuilding b agri Blue =
+                              Just $ show Blue ++ " already has that building"
+buildingAlreadyBuilt _ _ = Nothing                              
+
+
+specialBuildingResourceProblem :: Building -> Maybe Good -> Agricola -> Maybe String
+specialBuildingResourceProblem b g  agri = case buildingAlreadyBuilt b agri of
+  Just err -> Just err
+  Nothing -> case b of
+    HalfTimberedHouse -> resourceProblem [(Wood, 3), (Stone, 2), (Reed,1)] agri
+    Storage -> resourceProblem [(Wood, 2), (Reed,1)] agri
+    Shelter -> resourceProblem [(Wood, 2), (Stone,1)] agri
+    OpenStable -> resourceProblem [(fromJust  g,3)] agri
+    Stall -> resourceProblem [(Stone,3),(Reed,1)] agri
+    Stable -> resourceProblem [(fromJust g, 5)] agri
+
+buildingResourceProblem :: Building -> Agricola -> Maybe String
+buildingResourceProblem HalfTimberedHouse agri =
+  resourceProblem [(Wood, 3), (Stone, 2), (Reed,1)] agri
+buildingResourceProblem Storage agri =
+  resourceProblem [(Wood, 2), (Reed,1)] agri
+buildingResourceProblem Shelter agri =
+  resourceProblem [(Wood, 2), (Stone,1)] agri
+buildingResourceProblem OpenStable agri =
+  case resourceProblem [(Stone,3)] agri of
+  Nothing -> Nothing
+  Just a -> resourceProblem [(Wood,3)] agri
+buildingResourceProblem Stall agri =
+  resourceProblem [(Stone,3),(Reed,1)]  agri
+buildingResourceProblem Stable agri =
+  case resourceProblem [(Stone, 5)] agri of
+  Nothing -> Nothing
+  Just a -> resourceProblem [(Wood,5)] agri
+
+
+isSpecialBuilding :: Building -> Bool
+isSpecialBuilding HalfTimberedHouse = True
+isSpecialBuilding Storage = True
+isSpecialBuilding Shelter = True
+isSpecialBuilding OpenStable = True
+isSpecialBuilding _ = False
+
 isResourceProblem :: Action -> Agricola -> Maybe String
 isResourceProblem StartBuildingWoodFences = resourceProblem [(Wood,1)]
-isResourceProblem StartBuildingStall = resourceProblem [(Stone,3),(Reed,1)]
-isResourceProblem (StartBuildingStable g) = resourceProblem [(g,5)]
+isResourceProblem (StartBuilding b) | isSpecialBuilding b = \agri ->
+    buildingAlreadyBuilt b agri <|> buildingResourceProblem b agri
+isResourceProblem (StartBuilding b) = buildingResourceProblem b
+  
 isResourceProblem _ = const Nothing
 
 resourceProblem :: [(Good,Integer)] -> Agricola -> Maybe String

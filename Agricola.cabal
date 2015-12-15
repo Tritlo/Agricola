@@ -66,6 +66,7 @@ executable Agricola
                      , lens >= 4.13
                      , mtl >= 2.2.1
                      , ncurses >= 0.2.14
+                     , transformers >= 0.4.2.0
 
 
                                      

@@ -175,6 +175,7 @@ emptyPlayer = Player emptyFarm emptySupply 0
 type UnitBoardTile = Maybe Color
 type MonoBoardTile = Either Color Integer
 type DuoBoardTile = Either Color (Integer, Integer)
+type SpecialBoardTile =  (Maybe Color, Maybe Color)
 
 
 data Gameboard = Gameboard {
@@ -189,7 +190,7 @@ data Gameboard = Gameboard {
   , _buildStall   :: UnitBoardTile
   , _buildTroughs :: UnitBoardTile
   , _buildStable   :: UnitBoardTile
-  , _specialBuilding :: UnitBoardTile
+  , _specialBuilding :: SpecialBoardTile
   --, _specialBuilding2 :: UnitBoardTile
   , _millpond :: DuoBoardTile
   , _pigsAndSheep :: DuoBoardTile
@@ -207,6 +208,7 @@ append s = id %= flip (++) s
 data TileType = Unit
               | Mono
               | Duo
+              | Special
               deriving (Eq, Show)
 
 
@@ -222,9 +224,9 @@ data GameBoardTile =   SmallForest
                      | BuildTroughs
                      | BuildStable
                      | SpecialBuilding
-                     | Millpond 
-                     | PigsAndSheep 
-                     | CowsAndPigs 
+                     | Millpond
+                     | PigsAndSheep
+                     | CowsAndPigs
                      | HorsesAndSheep
                      deriving (Eq, Show)
 
@@ -260,12 +262,14 @@ tileType Resources = Unit
 tileType BuildStall = Unit
 tileType BuildTroughs = Unit
 tileType BuildStable = Unit
-tileType SpecialBuilding = Unit
+-- tileType SpecialBuilding = Unit
 
 tileType Millpond = Duo
 tileType PigsAndSheep = Duo
 tileType CowsAndPigs = Duo
 tileType HorsesAndSheep = Duo
+
+tileType SpecialBuilding = Special
 
 
 gameBoardLayout :: [[GameBoardTile]]
@@ -299,7 +303,6 @@ unitTileLens Resources = resources
 unitTileLens BuildStall = buildStall
 unitTileLens BuildTroughs = buildTroughs
 unitTileLens BuildStable = buildStable
-unitTileLens SpecialBuilding = specialBuilding
 
 duoTileLens
   :: Functor f =>
@@ -311,6 +314,9 @@ duoTileLens CowsAndPigs = cowsAndPigs
 duoTileLens HorsesAndSheep = horsesAndSheep
 
 
+specialTileLens SpecialBuilding = specialBuilding
+
+
 instrs :: GameBoardTile -> String
 instrs SmallForest = unlines ["Get Starting marker"] ++ "and take"
 instrs WoodFence = unlines ["","unlimited"] ++ "1 Wood -> Fence"
@@ -320,7 +326,7 @@ instrs Expand = unlines ["Expand your farm"]
 instrs BuildStall = unlines ["3 Stone 1 Reed", "->"] ++ "Stall"
 instrs BuildStable = unlines ["5 Wood or 5 Stone ", "->"] ++ "Stall -> Stables"
 instrs BuildTroughs = unlines ["+1 Trough", "also unlmited"] ++ "3 Wood -> Trough"
-instrs SpecialBuilding = unlines ["","Build a"]++ "special building"
+instrs SpecialBuilding = unlines ["Build a"]++ "special building"
 instrs _ = unlines [""] ++ "Take"
 
 showGameboardTile :: Gameboard -> GameBoardTile -> String
@@ -337,9 +343,13 @@ showGameboardTile board tile =
              Left c -> unlines ["",show c ++ " worker"]
              Right (a,b) -> unlines [instrs tile] ++ unwords  [show a , head reses, "and",
                                       show b ,last reses]
+           Special -> case board ^. specialTileLens tile of
+             (Nothing, Nothing) -> unlines ["",instrs tile]
+             (Just a, Nothing) -> unlines [instrs tile] ++ unwords  [show a ,"worker"]
+             (Just a, Just b) -> unlines ["", unwords  [show a,"and", show b, "workers"]]
           ]
   where reses = resourcesOnTile tile
-  
+
 
 showBoard board = ers
   where ers = map (map (showGameboardTile board)) gameBoardLayout
@@ -381,7 +391,7 @@ emptyBoard = Gameboard {
   , _buildStall = Nothing
   , _buildTroughs = Nothing
   , _buildStable = Nothing
-  , _specialBuilding = Nothing
+  , _specialBuilding = (Nothing,Nothing)
                        }
 
 removeWorkerOfSingle :: MonoBoardTile -> MonoBoardTile
@@ -475,15 +485,15 @@ data Action = DoNothing
               | TakeHorsesAndSheep
               | TakeAnimal Integer Integer
               | PlaceAnimal Animal Integer Integer
+              | ChooseAnimal Animal
               | PlaceTrough Integer Integer
-              | PlaceBuilding Building Integer Integer 
+              | PlaceBuilding Building Integer Integer
               | SpendResources Good Integer
               | StartBuildingTroughs
               | StartBuildingStoneWalls
               | StartBuildingWoodFences
-              | StartBuildingStall
-              | StartBuildingStable Good
               | SetMessage String
+              | StartBuilding Building
               | MultiAction [Action]
             deriving (Eq)
 
@@ -515,9 +525,10 @@ instance Show Action where
   show StartBuildingTroughs = "Start building troughs"
   show StartBuildingWoodFences = "Start building wood fences"
   show StartBuildingStoneWalls = "Start building stone walls"
-  show StartBuildingStall = "Build stall"
-  show (StartBuildingStable good) = "Build stable from " ++ map toLower (show good)
-  
+  show (StartBuilding b ) = "Build " ++ show b
+  show (ChooseAnimal a) = "Chose " ++ map toLower (show a)
+  show (MultiAction as) = "Cannot do all of " ++ unwords (map show as)
+
 instance Show Building where
   show Stall             = "Stall"
   show Stable            = "Stable"
