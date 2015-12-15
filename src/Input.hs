@@ -323,7 +323,7 @@ buildSpecialBuildingInteraction' agri = do
         throwError $ concat ["Cannot " , show sr, " since " , err, "."]
       Just pb@(PlaceBuilding _ _ _) <- getBP b
       Just an@(ChooseAnimal _) <-
-        lift $  lift $ chooseAnimalInteraction [Cow,Horse] chan agri
+        lift $ lift $ chooseAnimalInteraction [Cow,Horse] chan agri
       return $ (MultiAction [sr, sb, pb, an])
     Shelter -> do
       Just pb@(PlaceBuilding _ _ _) <- getBP b
@@ -337,7 +337,7 @@ buildSpecialBuildingInteraction' agri = do
         chmat = "Choose building material to build with:"
         chan = "Choose animal to get for free:"
         cht b = "Choose tile to place " ++ show b ++ " on:"
-        getBP b = lift $  lift $ placeBuildingInteraction b (cht b) agri
+        getBP b = lift $ lift $ placeBuildingInteraction b (cht b) agri
 
 
 -- buildSpecialBuildingInteraction :: Agricola -> Curses (Maybe Action)
