@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 module Input where
 
 import Agricola
@@ -230,40 +231,36 @@ multiActionInteraction :: [String]
                        -> Agricola
                        ->   Curses (Maybe Action)
 multiActionInteraction msgs costs interactions agri
-  = multiActionInteraction' agri [] interactions costs msgs ""
+  = runActionM $ multiActionInteraction' agri [] interactions costs msgs ""
    where
-     multiActionInteraction' :: Agricola -> [Action] -> [Interaction] -> [Action]
-                             -> [String] -> String -> Curses (Maybe Action)
-     multiActionInteraction' _ sofar ins cs ms _ | null ins || null cs || null ms = return $ Just (MultiAction sofar)
+     multiActionInteraction' _ sofar ins cs ms _ |
+       null ins || null cs || null ms = return $ MultiAction sofar
      multiActionInteraction' agri sofar interactions@(inter:inters) costs@(c:cs) msgs@(m:ms) err = do
        let prob = isProblem agri c
-       if null sofar && isJust prob
-         then return $ Just (SetMessage $ "Cannot " ++ show c
-                             ++ ", since " ++ (fromJust prob))
-         else do
-         -- always render the first cost, which is usually
-         -- a place worker on tile action.
-         if null sofar
-           then renderGame $ takeAction c agri
-           else renderGame agri
-         let errtop = if (isJust prob)
-                      then "Cannot do more, since "
-                           ++ fromJust prob
-                           ++ ". Press stop to finish or cancel to cancel."
-                      else err
-         action <- inter (unlines [m,errtop]) agri
-         case action of
-           Nothing -> return $ Just DoNothing
-           Just DoNothing -> return $ Just (MultiAction sofar)
-           Just EndTurn -> return $ Just (MultiAction (sofar ++ [EndTurn]))
-           Just a -> do
-             let newitems = [c,a]
-             case tryTakeMultiAction agri newitems of
-               Left na -> multiActionInteraction' na (sofar ++ newitems) inters cs ms ""
-               Right err -> multiActionInteraction' agri sofar interactions costs msgs $
-                                     unwords ["Cannot " , show c , "to"
-                                              , show a ,"since " , err
-                                              ,", try again."]
+       when (null sofar && isJust prob) $
+         throwError $ concat ["Cannot ", show c,", since ", fromJust prob]
+        
+       if null sofar
+         then lift $ lift $ renderGame $ takeAction c agri
+         else lift $ lift $ renderGame agri
+       let errtop = if (isJust prob)
+                    then concat ["Cannot do more, since "
+                                ,fromJust prob
+                                ,". Press stop to finish"
+                                ," or cancel to cancel."]
+                    else err
+       Just action <- lift $ lift $ inter (unlines [m,errtop]) agri
+       case action of
+         DoNothing -> return $ MultiAction sofar
+         EndTurn -> return $ MultiAction (sofar ++ [EndTurn])
+         a -> do
+           let newitems = [c,a]
+           case tryTakeMultiAction agri newitems of
+             Left na -> multiActionInteraction' na (sofar ++ newitems) inters cs ms ""
+             Right err -> do
+               let errmsg = unwords ["Cannot " , show c , "to", show a
+                                    ,"since " , err ,", try again."]
+               multiActionInteraction' agri sofar interactions costs msgs errmsg
 
 
 
@@ -290,29 +287,57 @@ buildStallInteraction =
 
 
 
-type ActionM = MaybeT Curses
+-- We wrap ExceptT in MaybeT, so that we can fail silently on
+-- pattern match errors.
+-- On Nothing, we just DoNothing as the action.
+-- On an error, we just set the message to the error.
+-- We use except t to be able to throw errors nicely
+type ActionM m = MaybeT (ExceptT String m)
 
-buildSpecialBuildingInteraction' :: Agricola -> ActionM Action
-buildSpecialBuildingInteraction' agri =
-  if not (hasWorkers agri && boardSpaceFree agri (StartBuilding Shelter))
-     then return $ SetMessage
-          "Cannot build special building, since no worker can be placed on gameboard tile."
-     else do
-  Just sb@(StartBuilding b) <- lift $ chooseBuildingInteraction chbuild agri
-  Just pb <- lift $ placeBuildingInteraction b (cht b) agri
+runActionM :: Monad m => ActionM m Action -> m (Maybe Action)
+runActionM actionProducer = do
+  m <- runExceptT $  runMaybeT $ actionProducer
+  case m of
+    Left err -> return $ Just $ SetMessage err
+    Right act -> case act of
+      Just a -> return $ Just a
+      Nothing -> return $ Just DoNothing
+
+
+buildSpecialBuildingInteraction' :: Agricola -> ActionM Curses Action
+buildSpecialBuildingInteraction' agri = do
+  unless (hasWorkers agri && boardSpaceFree agri (StartBuilding Shelter)) $
+    throwError $ "Cannot build special building,"
+                  ++" since no worker can be placed on gameboard tile."
+  Just sb@(StartBuilding b) <-
+    lift $  lift $ chooseBuildingInteraction chbuild agri
+  when (isJust $ isProblem agri sb ) $ do
+    let err = fromJust $ isProblem agri sb
+    throwError $ concat ["Cannot " , show sb, " since " , err, "."]
   case b of
     OpenStable -> do
-      Just spendR <- lift $ chooseResourceInteraction 3 [Stone, Wood] chmat agri
-      Just an <- lift $ chooseAnimalInteraction [Cow,Horse] chan agri
-      return $ (MultiAction [spendR, sb, pb, an])
+      Just sr@(SpendResources _ _) <-
+        lift $ lift $ chooseResourceInteraction 3 [Stone, Wood] chmat agri
+      when (isJust $ isProblem agri sb ) $ do
+        let err = fromJust $ isProblem agri sr
+        throwError $ concat ["Cannot " , show sr, " since " , err, "."]
+      Just pb@(PlaceBuilding _ _ _) <- getBP b
+      Just an@(ChooseAnimal _) <-
+        lift $  lift $ chooseAnimalInteraction [Cow,Horse] chan agri
+      return $ (MultiAction [sr, sb, pb, an])
     Shelter -> do
-      Just an <- lift $ chooseAnimalInteraction [Cow,Horse, Sheep, Pig] chan agri
+      Just pb@(PlaceBuilding _ _ _) <- getBP b
+      Just an@(ChooseAnimal _)  <-
+        lift $ lift $ chooseAnimalInteraction [Cow,Horse, Sheep, Pig] chan agri
       return $ MultiAction [sb, pb, an]
-    _ -> return $ MultiAction [sb, pb]
+    _ -> do
+      Just pb@(PlaceBuilding _ _ _) <- getBP b
+      return $ MultiAction [sb, pb]
   where chbuild = "Choose special building to build:"
         chmat = "Choose building material to build with:"
         chan = "Choose animal to get for free:"
         cht b = "Choose tile to place " ++ show b ++ " on:"
+        getBP b = lift $  lift $ placeBuildingInteraction b (cht b) agri
 
 
 -- buildSpecialBuildingInteraction :: Agricola -> Curses (Maybe Action)
@@ -410,11 +435,12 @@ mouseClick (mx,my) agri =
       Just WoodFence -> woodFenceInteraction agri
       Just BuildStall -> buildStallInteraction agri
       Just BuildStable -> buildStableInteraction agri
-      Just SpecialBuilding -> (<|> Just DoNothing) <$> (runMaybeT $ buildSpecialBuildingInteraction' agri)
+      Just SpecialBuilding -> runActionM $ buildSpecialBuildingInteraction' agri
       Nothing -> return $ Just DoNothing
     _ -> return $ Just DoNothing
     where isSomeonesTurn = agri ^. whoseTurn /= No
 
+  
 resized :: Curses (Maybe Action)
 resized = do
   (sx,sy) <- screenSize
