@@ -131,7 +131,7 @@ makeLenses ''Border
 data Tile = Tile { _building :: Maybe Building
                  , _tileanimals :: Maybe (Animal, Integer)
                  , _trough :: Bool
-                 , _expansion :: Maybe Integer
+                 , _isExpansion :: Bool
                  }
 
 makeLenses ''Tile
@@ -140,7 +140,7 @@ emptyTile :: Tile
 emptyTile = Tile { _building = Nothing
                  , _tileanimals = Nothing
                  , _trough = False
-                 , _expansion = Nothing
+                 , _isExpansion = False
                                }
 
 data Farm = Farm { _tiles :: [[Tile]]
@@ -778,8 +778,8 @@ defaultControls = [
 
 numberOfExpansions ::  Color -> Agricola -> Integer
 numberOfExpansions col agri =
-  toInteger $ maximum  $ map fromInteger $
-  0 :  mapMaybe _expansion  (concat (agri ^. player col . farm . tiles))
+  toInteger $ sum $ map (fromEnum . _isExpansion . head) $ transpose ts
+  where ts = agri ^. player col . farm . tiles
 
 farmVolume :: Agricola -> Color -> Measurements
 farmVolume agri col = volume (agri ^. (player col . farm))

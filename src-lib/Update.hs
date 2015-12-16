@@ -10,8 +10,8 @@ import Control.Monad.State
 import Data.Maybe
 import Data.Char (toLower)
 import Data.List
+import Data.Function
 import Control.Applicative
-
 
 
 placeBorder ::  Alignment -> Integer -> Integer  -> Agricola -> Agricola
@@ -209,16 +209,8 @@ takeAction TakeBigQuarry   = takeMonoTile BigQuarry Stone
 takeAction TakeSmallQuarry = takeMonoTile SmallQuarry Stone
 takeAction (PlaceExpand isLeftSide) = flip (&~) $ do
   col <- use whoseTurn
-  expssofar <- numberOfExpansions col <$> use id
-  let  newts = replicate 3  emptyTile {_expansion = Just (expssofar + 1)}
   global . expansions -= 1
-  player col . farm . tiles %= addTo isLeftSide newts
-  player col . farm . vborders %= addTo isLeftSide newvs
-  player col . farm . hborders %= addTo isLeftSide newhs
-  where newvs = replicate 3 (Border V False)
-        newhs = replicate 4 (Border H False)
-        addTo True new old = transpose $ new : transpose old
-        addTo False new old = transpose $ transpose old ++ [new]
+  player col . farm %= expandFarm isLeftSide
 takeAction TakeExpand = takeMonoTile Expand Fence
 
 
@@ -232,6 +224,19 @@ takeAction (TakeAnimal cx cy) = flip (&~) $ do
     else player playerColor . farm . tile cx cy .tileanimals .= Just (ani,n-1)
 
 takeAction a = const $ error $ "Cannot find action for " ++ show a
+
+expandFarm :: Bool -> Farm -> Farm
+expandFarm isLeftSide = flip (&~) $  do
+  tiles %= addTo isLeftSide newts
+  vborders %= addTo isLeftSide newvs
+  hborders %= addTo isLeftSide newhs
+  where newvs = replicate 3 (Border V False)
+        newhs = replicate 4 (Border H False)
+        newts = replicate 3 emptyTile {_isExpansion = True}
+        addTo True new old = transpose $ new : transpose old
+        addTo False new old = transpose $ transpose old ++ [new]
+
+
 
 takeUnitTile gbtile agri = agri &~ do
   col <- use whoseTurn
@@ -553,6 +558,19 @@ isEnclosed agri c = not $ null $ enclosedWith f c
 --   border V 1 0 . isThere .= True
 --   border V 1 1 . isThere .= True
 
+testFarm3 = expandFarm True startingFarm &~  do
+   border H 0 0 . isThere .= True
+   border V 0 0 . isThere .= True
+   border V 0 1 . isThere .= True
+   border V 1 0 . isThere .= True
+   border V 1 1 . isThere .= True
+   border V 2 0 . isThere .= True
+   border H 3 0 . isThere .= True
+   -- tile 2 0 . trough .= True
+   -- tile 1 0 . trough .= True
+   -- tile 0 0 . trough .= True
+
+
 
 coordInDirection :: Coord -> Direction -> Coord
 coordInDirection (cn,cm) N = ( cn - 1, cm)
@@ -616,12 +634,32 @@ hasTrough agri (cx,cy) | agri ^. player col . farm . tile cx cy . trough = 1
   where col = agri ^. whoseTurn
 
 
+
+
+isTileUsed farm row col = case t of
+  Tile b _ tr True -> isJust b || tr ||  isEnc
+  _ -> False
+  where t = farm ^.  tile row col
+        isEnc = not $ null $ enclosedWith farm (row, col)
+
+
+scoreExpansions farm = 4 * sum (map (fromEnum . isRowUsed) coords)
+  where
+        numrows = toInteger $ length $ head (farm ^. tiles)
+        numcols = toInteger $ length $ farm ^. tiles
+        coords =
+          groupBy ((==) `on` fst) [(row, col) | row <- [0..numrows - 1]
+                                              , col <- [0..numcols - 1]]
+        isRowUsed = all (uncurry  (flip $ isTileUsed farm))
+
 bonusScore ::  Color -> Agricola -> Rational
 bonusScore col agri = buildingscore + expansionscore
-  where pts = agri ^. player col . farm . tiles
-        builds = mapMaybe _building $ concat pts
-        buildingscore = sum $ map (scoreBuilding agri col) builds
-        expansionscore = 0
+  where
+    pf = agri ^. player col . farm
+    pts = pf ^. tiles
+    builds = mapMaybe _building $ concat pts
+    buildingscore = sum $ map (scoreBuilding agri col) builds
+    expansionscore = toRational $ scoreExpansions pf
 
 
 scoreBuilding ::  Agricola -> Color -> Building -> Rational
