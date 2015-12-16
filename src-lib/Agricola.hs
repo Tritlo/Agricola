@@ -149,6 +149,13 @@ data Farm = Farm { _tiles :: [[Tile]]
                  }
 makeLenses ''Farm
 
+
+farmcols :: Farm -> Integer
+farmcols farm = toInteger $ length $ head $  farm ^. tiles 
+
+farmrows :: Farm -> Integer
+farmrows farm = toInteger $ length $  farm ^. tiles 
+
 type Measurements = (Integer, Integer)
 
 capitalize "" = ""
@@ -561,7 +568,9 @@ instance Show Action where
   show (PlaceBorder al n m) = case al of
     V -> "place vertical border on (" ++ show n ++ ", " ++ show m ++ ")"
     H -> "place horizontal border on (" ++ show n ++ ", " ++ show m ++")"
+  show (FreeAnimal a) =  "free a " ++ map toLower (show a)
   show EndTurn = "end turn"
+  show EndPhase = "end phase"
   show TakeResources = "take resources"
   show TakeSmallForest = "take from small forest"
   show TakeBigForest = "take from big forest"
@@ -572,8 +581,6 @@ instance Show Action where
   show TakePigsAndSheep = "take from pigs and sheep"
   show TakeCowsAndPigs = "take from cows and pigs"
   show TakeHorsesAndSheep = "take from horses and sheep"
-  show EndPhase = "end phase"
-  show (FreeAnimal a) =  "free a " ++ map toLower (show a)
   show (TakeAnimal n m) = "take animal from tile (" ++ show n ++", " ++ show m ++ ")"
   show (PlaceAnimal a n m) = "place " ++ map toLower (show a) ++ " on tile (" ++ show n ++", " ++ show m ++ ")"
   show (PlaceTrough n m) = "place trough on tile (" ++ show n ++", " ++ show m ++")"
@@ -586,6 +593,8 @@ instance Show Action where
   show (StartBuilding b ) = "Build " ++ show b
   show (ChooseAnimal a) = "Chose " ++ map toLower (show a)
   show (MultiAction as) = "Cannot do all of " ++ unwords (map show as)
+  show (PlaceExpand True) = "Place expansion on left side."
+  show (PlaceExpand False) = "Place expansion on left side."
 
 instance Show Building where
   show Stall             = "Stall"
@@ -712,6 +721,7 @@ initPlayer player = player &~ do
 
 
 totalNumExpansions agri = numberOfExpansions Red agri + numberOfExpansions Blue agri
+
 
 farmOffset :: Agricola -> Color -> Coord
 farmOffset agri Red = (x,29)

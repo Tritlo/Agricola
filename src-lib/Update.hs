@@ -223,7 +223,7 @@ takeAction (TakeAnimal cx cy) = flip (&~) $ do
     then player playerColor . farm . tile cx cy .tileanimals .= Nothing
     else player playerColor . farm . tile cx cy .tileanimals .= Just (ani,n-1)
 
-takeAction a = const $ error $ "Cannot find action for " ++ show a
+takeAction a = takeAction $ SetMessage $ "Uknown action " ++ show a
 
 expandFarm :: Bool -> Farm -> Farm
 expandFarm isLeftSide = flip (&~) $  do
@@ -267,6 +267,8 @@ takeSpecialTile gbtile agri = agri &~ do
   subtractWorker
 
 tryTakeAction :: Agricola -> Action -> Maybe Agricola
+tryTakeAction agri (MultiAction []) = tryTakeAction agri DoNothing
+tryTakeAction agri (MultiAction [a]) = tryTakeAction agri a
 tryTakeAction agri (MultiAction actions) =
   case tryTakeMultiAction agri actions of
   Left nagri -> return $ nagri & message .~ ""
@@ -358,6 +360,29 @@ workerActions = [ TakeResources
                 ++ [StartBuilding b
                    | b <- [Stable, OpenStable, HalfTimberedHouse , Storage , Shelter, Stall]]
 
+checkTileCoord :: Agricola -> Integer -> Integer -> Bool
+checkTileCoord agri cx cy =
+   cx >= 0 && cy >= 0 && cx < rows && cy < cols
+  where col = agri ^. whoseTurn
+        ts = agri ^. (player col . farm . tiles)
+        rows = toInteger $ length ts
+        cols = toInteger $ length $ head ts
+
+checkBorderCoord :: Agricola -> Alignment -> Integer -> Integer -> Bool
+checkBorderCoord agri H cx cy =
+   cx >= 0 && cy >= 0 && cx < rows && cy < cols
+  where col = agri ^. whoseTurn
+        ts = agri ^. (player col . farm . hborders)
+        rows = toInteger $ length ts
+        cols = toInteger $ length $ head ts
+
+checkBorderCoord agri V cx cy =
+   cx >= 0 && cy >= 0 && cx < rows && cy < cols
+  where col = agri ^. whoseTurn
+        ts = agri ^. (player col . farm . vborders)
+        rows = toInteger $ length ts
+        cols = toInteger $ length $ head ts
+
 isProblem :: Agricola -> Action ->  Maybe String
 isProblem agri (PlaceExpand _)
   | (agri ^. global . expansions) <= 0 =
@@ -375,15 +400,20 @@ isProblem agri EndPhase =
     x -> x
   x -> x
 
+
+
 isProblem agri (PlaceBorder al cx cy)
+  | not (checkBorderCoord agri al cx cy) = Just "invalid coordinate."
   | not (hasBorders agri col) = Just "you don't have enough borders"
   | not (freeSpace agri col al cx cy) = Just "there is already a border there"
   where col = agri ^. whoseTurn
 
 isProblem agri (TakeAnimal cx cy)
+  | not (checkTileCoord agri cx cy) = Just "invalid coordinate."
   |  not (hasAnimals agri cx cy) = Just "there is no animal on that tile."
 
 isProblem agri (PlaceAnimal ani cx cy)
+  | not (checkTileCoord agri cx cy) = Just "invalid coordinate."
   | agri ^. (player col . supply . animals . animalLens ani) == 0 =
       Just $ "there is no " ++ map toLower (show ani) ++ " to place"
   | otherwise = case isSameAnimal agri col c ani of
@@ -404,6 +434,7 @@ isProblem agri (SpendResources good n)
   where col = agri ^. whoseTurn
 
 isProblem agri (PlaceTrough cx cy)
+  | not (checkTileCoord agri cx cy) = Just "invalid coordinate."
   | agri ^. player col . farm . tile cx cy. trough =
       Just "there is already a trough on that tile"
   | agri ^. global . troughs <= 0 =
@@ -411,28 +442,34 @@ isProblem agri (PlaceTrough cx cy)
   where col = agri ^. whoseTurn
 
 isProblem agri (PlaceBuilding Stable cx cy)
+  | not (checkTileCoord agri cx cy) = Just "invalid coordinate."
   | (agri ^. player col . farm . tile cx cy. building) /= Just Stall =
       Just "there is no stall on that tile"
   | otherwise = Nothing
   where col = agri ^. whoseTurn
 
 isProblem agri (PlaceBuilding OpenStable cx cy)
+  | not (checkTileCoord agri cx cy) = Just "invalid coordinate."
   | agri ^. player col . farm . tile cx cy. building /= Just Stall =
       Just "there is no stall there"
   | otherwise = Nothing
   where col = agri ^. whoseTurn
 
 isProblem agri (PlaceBuilding HalfTimberedHouse cx cy)
+  | not (checkTileCoord agri cx cy) = Just "invalid coordinate."
   | agri ^. player col . farm . tile cx cy. building /= Just Cottage =
       Just "there is no cottage there "
   | otherwise = Nothing
   where col = agri ^. whoseTurn
 
+isProblem _ (PlaceBuilding Cottage _ _) = Just "can't place a cottage"
 isProblem agri (PlaceBuilding b cx cy)
+  | not (checkTileCoord agri cx cy) = Just "invalid coordinate."
   | isJust (agri ^. player col . farm . tile cx cy. building) =
       Just "there is already a building on that tile"
   where col = agri ^. whoseTurn
 
+isProblem _ (StartBuilding Cottage) = Just "can't place a cottage."
 isProblem agri action | action `elem` workerActions =
                         isProblemWorkerAction agri action
   where isProblemWorkerAction agri action
@@ -679,19 +716,19 @@ finalPlayerScore col agri = animalScore col agri + bonusScore col agri
 
 finalScore :: Agricola -> String
 finalScore agri = final
-  where reds = finalPlayerScore Red agri
-        blues = finalPlayerScore Blue agri
+  where reds = fromRational $ finalPlayerScore Red agri
+        blues =  fromRational $ finalPlayerScore Blue agri
         winner = if reds > blues then Red else Blue
         loser = otherColor winner
         winners = maximum [reds, blues]
         losers = minimum [reds, blues]
         final = unwords [ show winner
                         , "wins with a score of"
-                        , show winners
+                        , show (winners :: Double)
                         , "while"
                         , show loser
                         , "only got a score of"
-                        , show losers
+                        , show (losers :: Double)
                         ]
 
 startingState :: Agricola
