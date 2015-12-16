@@ -13,17 +13,20 @@ import Data.List
 import Data.Function
 import Control.Applicative
 
-
+-- places a border of the given alignment in the given slot of the
+-- current player's farm
 placeBorder ::  Alignment -> Integer -> Integer  -> Agricola -> Agricola
 placeBorder al n m = flip (&~) $ do
   color <- use whoseTurn
   (player color . supply . borders) -= 1
   (player color . farm . border al n m) .= Border al True
 
-
+-- checks whether the current player has borders left in their supply
 hasBorders :: Agricola -> Color -> Bool
 hasBorders agri color = agri ^. (player color . supply . borders) >= 1
 
+-- checks whether the given border-slot in the current player's farm
+-- is empty
 freeSpace :: Agricola -> Color -> Alignment -> Integer -> Integer -> Bool
 freeSpace agri color al n m = not $ agri ^.
                               (player color . farm . border al n m . isThere )
@@ -40,22 +43,17 @@ addSupply :: Supply -> Supply -> Supply
 addSupply (Supply ab aw as ar aa) (Supply bb bw bs br ba) =
   Supply (ab+bb) (aw+bw) (as+bs) (ar+br) (aa `addAnimalSupply` ba)
 
+-- adds the given supply to the current player's supply
 takeResources :: Agricola -> Supply -> Agricola
 takeResources agri sup = agri & player col . supply %~ addSupply sup
   where col = agri ^. whoseTurn
 
-
+-- subtract a worker token from the current player
 subtractWorker :: StateT Agricola Identity ()
 subtractWorker = do
   playerColor <- use whoseTurn
   (player playerColor . workers) -= 1
   hasPlacedWorker .= True
-
-
-breedAnimals :: Agricola -> Agricola
-breedAnimals = flip (&~) $ do
-  id %= breedAnimals' Red
-  id %= breedAnimals'  Blue
 
 
 countAnimalInTiles :: Animal -> [[Tile]] -> Integer
@@ -65,10 +63,17 @@ countAnimalInTiles an ts = sum (map countInRow ts)
           Nothing -> 0
           Just (b, n) -> if an == b then n else 0
 
-
+-- count the number of animals of the given type the player
+-- of the given color has
 countAnimal :: Agricola -> Color -> Animal -> Integer
 countAnimal agri col animal = countAnimalInTiles animal ts
   where ts = agri ^. (player col . farm . tiles)
+
+
+breedAnimals :: Agricola -> Agricola
+breedAnimals = flip (&~) $ do
+  id %= breedAnimals' Red
+  id %= breedAnimals'  Blue
 
 
 breedAnimals' :: Color -> Agricola -> Agricola
@@ -78,52 +83,50 @@ breedAnimals' col agri = agri &~ do
   id %= breedAnimal col Cow
   id %= breedAnimal col Horse
 
-
+-- if the given player has at least 2 animals of the given type,
+-- they produce 1 offspring
 breedAnimal ::  Color -> Animal -> Agricola -> Agricola
 breedAnimal col an agri = agri &~ when (countAnimal agri col an >= 2)
                           (player col . supply . animals . animalLens an += 1)
 
+
 takeAction :: Action -> Agricola -> Agricola
+takeAction DoNothing = id
+takeAction (SetMessage msg) = set message msg
 takeAction (ChooseAnimal a) = flip (&~) $ do
   col <- use whoseTurn
   (player col . supply . animals . animalLens a) += 1
-  
+takeAction (FreeAnimal a) = flip (&~) $ do
+  col <- use whoseTurn
+  player col . supply . animals . animalLens a -= 1
+takeAction (PlaceAnimal a cx cy) = placeAnimal (cx,cy) a
+
 takeAction StartBuildingTroughs = takeUnitTile BuildTroughs
 takeAction StartBuildingStoneWalls = takeUnitTile StoneWall
 takeAction StartBuildingWoodFences = flip (&~) $ do
   col <- use whoseTurn
   id %= takeUnitTile WoodFence
   player col . supply . goodLens Wood -= 1
-  
-takeAction DoNothing = id
-takeAction (SetMessage msg) = set message msg
-takeAction (PlaceBorder al cx cy) = placeBorder al cx cy
-takeAction (PlaceAnimal ani cx cy) = placeAnimal (cx,cy) ani
-takeAction (StartBuilding HalfTimberedHouse ) = flip (&~) $ do
+takeAction (StartBuilding HalfTimberedHouse) = flip (&~) $ do
   id %= takeSpecialTile SpecialBuilding
   col <- use whoseTurn
   player col . supply . goodLens Stone -= 2
   player col . supply . goodLens Reed -= 1
   player col . supply . goodLens Wood -= 3
-
-takeAction (StartBuilding Storage ) = flip (&~) $ do
+takeAction (StartBuilding Storage) = flip (&~) $ do
   id %= takeSpecialTile SpecialBuilding
   col <- use whoseTurn
   player col . supply . goodLens Wood -= 2
   player col . supply . goodLens Reed -= 1
-
 takeAction (StartBuilding Shelter ) = flip (&~) $ do
   id %= takeSpecialTile SpecialBuilding
   col <- use whoseTurn
   player col . supply . goodLens Stone -= 1
   player col . supply . goodLens Wood -= 2
-
 takeAction (StartBuilding OpenStable ) = flip (&~) $ do
   id %= takeSpecialTile SpecialBuilding
-  
 takeAction (StartBuilding Stable ) = flip (&~) $ do
   id %= takeUnitTile BuildStable
-
 takeAction (StartBuilding Stall ) = flip (&~) $ do
   id %= takeUnitTile BuildStall
   col <- use whoseTurn
@@ -134,6 +137,7 @@ takeAction (SpendResources good n) = flip (&~) $ do
   col <- use whoseTurn
   player col . supply . goodLens good -= n
 
+takeAction (PlaceBorder al cx cy) = placeBorder al cx cy
 takeAction (PlaceTrough cx cy) = flip (&~) $ do
   col <- use whoseTurn
   player col . farm . tile cx cy . trough .= True
@@ -145,15 +149,11 @@ takeAction (PlaceBuilding b cx cy) = flip (&~) $ do
       global . globalBuildingLens b -= 1
       when (b == OpenStable) $ do
         global . stalls += 1
-takeAction (FreeAnimal an) = flip (&~) $ do
-  col <- use whoseTurn
-  player col . supply . animals . animalLens an -= 1
 
 takeAction EndTurn = flip (&~) $ do
   whoseTurn %= otherColor
   curphase <- use phase
   when (curphase == WorkPhase) $ hasPlacedWorker .= False
-
 takeAction EndPhase = flip (&~) $ do
   curphase <- use phase
   starter <- use starting
@@ -189,21 +189,18 @@ takeAction TakeResources = flip (&~) $ do
   player col . supply . reeds += 1
   player col . supply . stones += 1
   id %= takeUnitTile Resources
-
-
-takeAction TakeMillpond = takeDuoTile Millpond (goodLens Reed) (animals . sheep)
-takeAction TakePigsAndSheep = takeDuoTile PigsAndSheep (animals . pigs) (animals . sheep)
-takeAction TakeCowsAndPigs = takeDuoTile CowsAndPigs (animals . cows) (animals . pigs)
-takeAction TakeHorsesAndSheep = takeDuoTile HorsesAndSheep (animals .  horses) (animals . sheep)
-
-
+takeAction TakeMillpond = takeDuoTile
+  Millpond (goodLens Reed) (animals . sheep)
+takeAction TakePigsAndSheep = takeDuoTile
+  PigsAndSheep (animals . pigs) (animals . sheep)
+takeAction TakeCowsAndPigs = takeDuoTile
+  CowsAndPigs (animals . cows) (animals . pigs)
+takeAction TakeHorsesAndSheep = takeDuoTile
+  HorsesAndSheep (animals .  horses) (animals . sheep)
 takeAction TakeSmallForest = flip (&~) $ do
   id %= takeMonoTile SmallForest Wood
   playerColor <- use whoseTurn
   starting .= playerColor
-
-
-
 takeAction TakeBigForest   = takeMonoTile BigForest Wood
 takeAction TakeBigQuarry   = takeMonoTile BigQuarry Stone
 takeAction TakeSmallQuarry = takeMonoTile SmallQuarry Stone
@@ -212,9 +209,6 @@ takeAction (PlaceExpand isLeftSide) = flip (&~) $ do
   global . expansions -= 1
   player col . farm %= expandFarm isLeftSide
 takeAction TakeExpand = takeMonoTile Expand Fence
-
-
-
 takeAction (TakeAnimal cx cy) = flip (&~) $ do
   playerColor <- use whoseTurn
   Just (ani,n) <- use (player playerColor . farm . tile cx cy .tileanimals)
@@ -223,8 +217,10 @@ takeAction (TakeAnimal cx cy) = flip (&~) $ do
     then player playerColor . farm . tile cx cy .tileanimals .= Nothing
     else player playerColor . farm . tile cx cy .tileanimals .= Just (ani,n-1)
 
-takeAction a = takeAction $ SetMessage $ "Uknown action " ++ show a
 
+takeAction a = takeAction $ SetMessage $ "Unknown action " ++ show a
+
+-- Add expansion to farm
 expandFarm :: Bool -> Farm -> Farm
 expandFarm isLeftSide = flip (&~) $  do
   tiles %= addTo isLeftSide newts
@@ -236,13 +232,21 @@ expandFarm isLeftSide = flip (&~) $  do
         addTo True new old = transpose $ new : transpose old
         addTo False new old = transpose $ transpose old ++ [new]
 
+-- the takeTile functions place one of the current player's
+-- worker tokens on the given game board tile
+-- and add the tile's resources to the player's
 
-
+takeUnitTile :: GameBoardTile -> Agricola -> Agricola
 takeUnitTile gbtile agri = agri &~ do
   col <- use whoseTurn
   board . (unitTileLens gbtile) .= Just col
   subtractWorker
 
+takeDuoTile
+  :: GameBoardTile
+     -> ((Integer -> Identity Integer) -> Supply -> Identity Supply)
+     -> ((Integer -> Identity Integer) -> Supply -> Identity Supply)
+     -> Agricola -> Agricola
 takeDuoTile gbtile fspath snpath agri = agri &~ do
   Right (fs,sn) <- use (board . duoTileLens gbtile )
   col <- use whoseTurn
@@ -251,6 +255,7 @@ takeDuoTile gbtile fspath snpath agri = agri &~ do
   board . duoTileLens gbtile .= Left col
   subtractWorker
 
+takeMonoTile :: GameBoardTile -> Good -> Agricola -> Agricola
 takeMonoTile gbtile good agri = agri &~ do
   Right r <- use (board . monoTileLens gbtile)
   col <- use whoseTurn
@@ -258,6 +263,7 @@ takeMonoTile gbtile good agri = agri &~ do
   board . monoTileLens gbtile .= Left col
   subtractWorker
 
+takeSpecialTile :: GameBoardTile -> Agricola -> Agricola
 takeSpecialTile gbtile agri = agri &~ do
   (a,Nothing) <- use (board . specialTileLens gbtile)
   col <- use whoseTurn
@@ -266,6 +272,8 @@ takeSpecialTile gbtile agri = agri &~ do
     Nothing -> board . specialTileLens gbtile .= (Just col,Nothing)
   subtractWorker
 
+-- Implement given action if it is legal, otherwise
+-- return appropriate error message
 tryTakeAction :: Agricola -> Action -> Maybe Agricola
 tryTakeAction agri (MultiAction []) = tryTakeAction agri DoNothing
 tryTakeAction agri (MultiAction [a]) = tryTakeAction agri a
@@ -275,13 +283,11 @@ tryTakeAction agri (MultiAction actions) =
   Right err -> return $ agri & message .~ ("Cannot do all of "
                                            ++ concatMap ((++ ", ") . show ) actions
                                            ++ "since "  ++ err)
-
 tryTakeAction agri action =
   case isProblem agri action of
   Nothing -> let newagri = agri & message .~ "" in
     return $ takeAction action newagri
   Just err -> return $ agri & message .~ ("Cannot " ++ show action ++ ", " ++ err)
-
 
 tryTakeMultiAction :: Agricola -> [Action] -> Either Agricola String
 tryTakeMultiAction agri [] = Left agri
@@ -298,14 +304,17 @@ placeAnimal (cx,cy) animal = flip (&~) $ do
   player colr . supply . animals . animalLens animal -= 1
   player colr . farm . tile cx cy . tileanimals %= addAnimal animal
 
-
+-- check whether the current player has any worker tokens left
 hasWorkers :: Agricola -> Bool
 hasWorkers agri = agri ^. (player (agri ^. whoseTurn) . workers) > 0
 
+-- check whether there are animals on the given tile of the
+-- current player's farm
 hasAnimals :: Agricola -> Integer -> Integer -> Bool
 hasAnimals agri cx cy = let col = agri ^. whoseTurn in
   isJust (agri ^. (player col . farm . tile cx cy . tileanimals))
 
+-- check whether the current player has any unplaced animals
 hasAnimalsInSupply agri =
      agri ^. player col . supply . animals . animalLens Sheep > 0
   || agri ^. player col . supply . animals . animalLens Cow > 0
@@ -341,7 +350,7 @@ boardSpaceFree agri (StartBuilding b ) | isSpecialBuilding b =
   (Just _, Just _) -> False
   _ -> True
 
-
+-- Actions that involve placing a worker token on a gameboard tile
 workerActions :: [Action]
 workerActions = [ TakeResources
                 , TakeSmallForest
@@ -360,6 +369,8 @@ workerActions = [ TakeResources
                 ++ [StartBuilding b
                    | b <- [Stable, OpenStable, HalfTimberedHouse , Storage , Shelter, Stall]]
 
+-- Check whether the given action is legal and return an appropriate
+-- error message if not
 checkTileCoord :: Agricola -> Integer -> Integer -> Bool
 checkTileCoord agri cx cy =
    cx >= 0 && cy >= 0 && cx < rows && cy < cols
@@ -386,12 +397,13 @@ checkBorderCoord agri V cx cy =
 isProblem :: Agricola -> Action ->  Maybe String
 isProblem agri (PlaceExpand _)
   | (agri ^. global . expansions) <= 0 =
-      Just "there are no expansion left in the global supply."
+      Just "there are no expansions left in the global supply."
 
 isProblem agri EndTurn
   | hasWorkers agri && not (agri ^. hasPlacedWorker) = Just $ show col ++ " has to place worker"
   | hasAnimalsInSupply agri = Just $ show col ++ " has unplaced animals, free them or place 'em"
   where col = agri ^. whoseTurn
+
 isProblem agri EndPhase =
   case isProblem agri EndTurn of
   Nothing -> case isProblem (agri & whoseTurn %~ otherColor) EndTurn of
@@ -399,8 +411,6 @@ isProblem agri EndPhase =
     Nothing  | agri ^. (blue . workers) > 0 -> Just "blue has unplaced workers."
     x -> x
   x -> x
-
-
 
 isProblem agri (PlaceBorder al cx cy)
   | not (checkBorderCoord agri al cx cy) = Just "invalid coordinate."
@@ -480,7 +490,8 @@ isProblem agri action | action `elem` workerActions =
 
 isProblem _ _ = Nothing
 
-
+-- Check whether the current player has the required resources to build the
+-- given building, return appropriate error message if not
 buildingResourceProblem :: Building -> Agricola -> Maybe String
 buildingResourceProblem HalfTimberedHouse agri =
   resourceProblem [(Wood, 3), (Stone, 2), (Reed,1)] agri
@@ -507,6 +518,7 @@ isSpecialBuilding Shelter = True
 isSpecialBuilding OpenStable = True
 isSpecialBuilding _ = False
 
+-- Check whether the given building is in the global game supply
 isInSupply :: Building -> Agricola -> Maybe String
 isInSupply Stable agri = Nothing
 isInSupply b agri =
@@ -514,12 +526,16 @@ isInSupply b agri =
   then Just $ "all available " ++ show b ++ " have been built already"
   else Nothing
 
+-- Check whether the current player has the required resources to
+-- implement the given action
 isResourceProblem :: Action -> Agricola -> Maybe String
 isResourceProblem StartBuildingWoodFences = resourceProblem [(Wood,1)]
 isResourceProblem (StartBuilding b) = \agri ->
   isInSupply b agri <|> buildingResourceProblem b agri
 isResourceProblem _ = const Nothing
 
+-- Check whether the given numbers of the given goods are in the
+-- current player's supply
 resourceProblem :: [(Good,Integer)] -> Agricola -> Maybe String
 resourceProblem [] agri = Nothing
 resourceProblem ((good,n):goods) agri =
@@ -529,12 +545,13 @@ resourceProblem ((good,n):goods) agri =
   where col = agri ^. whoseTurn
 
 
+addAnimal :: Animal -> Maybe (Animal, Integer) -> Maybe (Animal, Integer)
 addAnimal a Nothing      = Just (a,1)
 addAnimal a (Just (b,n)) | a == b = Just (a,n+1)
 addAnimal _ _            = error "Cannot add different animal"
 
-
-
+-- Check whether the given tile of the current player's farm contains
+-- the given animal type or a different one
 isSameAnimal :: Agricola -> Color -> Coord -> Animal -> Maybe Animal
 isSameAnimal agri colr (cx,cy) an =
   let tileAn = agri ^. player colr . farm . tile cx cy . tileanimals in
@@ -543,18 +560,21 @@ isSameAnimal agri colr (cx,cy) an =
       else Just $ (fst $ fromJust tileAn)
 
 
-
 data Direction = N | S | E | W deriving (Eq)
 
 allDirections :: [Direction]
 allDirections = [N,S,E,W]
 
+-- Check whether the given coordinate is outside the bounds of the
+-- given grid
 isOutOfBounds :: [[a]] -> Coord -> Bool
 isOutOfBounds grid c@(cn,cm) = cn < 0
                                || cn >= toInteger (length grid)
                                || cm < 0
                                || cm >= toInteger (maximum $ map length grid)
 
+-- Returns a list of the coordinates that are enclosed within the same
+-- pasture as the given coordinate on the given farm
 enclosedWith :: Farm -> Coord -> [Coord]
 enclosedWith farm coord = enclosedWith' [] [coord]
   where
@@ -569,7 +589,8 @@ enclosedWith farm coord = enclosedWith' [] [coord]
                           not $ hasBorder farm c d,
                           not $ hasBuilding farm c d]
 
-
+-- Check whether the given coordinate on the current player's farm is enclosed
+-- within a pasture
 isEnclosed :: Agricola -> Coord -> Bool
 isEnclosed agri c = not $ null $ enclosedWith f c
   where col = agri ^. whoseTurn
@@ -593,6 +614,7 @@ hasBorder farm (cn,cm) S = farm ^. (border H (cn +1) cm. isThere)
 hasBorder farm (cn,cm) W = farm ^. (border V cn cm . isThere)
 hasBorder farm (cn,cm) E = farm ^. (border V cn (cm + 1) . isThere)
 
+-- The number of animals allowed in the given building
 buildingCapacity :: Building -> Integer
 buildingCapacity Cottage = 1
 buildingCapacity Stall = 3
@@ -602,6 +624,8 @@ buildingCapacity HalfTimberedHouse = 2
 buildingCapacity Storage = 2
 buildingCapacity Shelter = 1
 
+-- The number of animals allowed on the given coordinate
+--- of the current player's farm
 animalCapacity :: Agricola -> Coord -> Integer
 animalCapacity agri c@(cx,cy) =
   case agri ^. player col . farm . tile cx cy . building of
@@ -611,6 +635,8 @@ animalCapacity agri c@(cx,cy) =
   where col = agri ^. whoseTurn
         t   = hasTrough agri c
 
+-- The number of free animal spaces on the given coordinate
+--- of the current player's farm
 animalSpace :: Agricola -> Coord -> Integer
 animalSpace agri c@(cx,cy)
   | isNothing tileAn = animalCapacity agri c
@@ -639,15 +665,17 @@ hasTrough agri (cx,cy)
   where col = agri ^. whoseTurn
 
 
-
-
+-- Check whether the given tile is in use
+-- (Has a building or trough or is fully enclosed)
+isTileUsed :: Farm -> Integer -> Integer -> Bool
 isTileUsed farm row col = case t of
   Tile b _ tr True -> isJust b || tr ||  isEnc
   _ -> False
   where t = farm ^.  tile row col
         isEnc = not $ null $ enclosedWith farm (row, col)
 
-
+-- Each farm expansion where all 3 spaces are in use gives 4 points
+scoreExpansions :: Farm -> Int
 scoreExpansions farm = 4 * sum (map (fromEnum . isRowUsed) coords)
   where
         numrows = toInteger $ length $ head (farm ^. tiles)
@@ -657,6 +685,7 @@ scoreExpansions farm = 4 * sum (map (fromEnum . isRowUsed) coords)
                                               , col <- [0..numcols - 1]]
         isRowUsed = all (uncurry  (flip $ isTileUsed farm))
 
+-- Cumulative points for buildings and expansions
 bonusScore ::  Color -> Agricola -> Rational
 bonusScore col agri = buildingscore + expansionscore
   where
@@ -667,6 +696,7 @@ bonusScore col agri = buildingscore + expansionscore
     expansionscore = toRational $ scoreExpansions pf
 
 
+-- Scores for buildings, accoring to the scoring rules
 scoreBuilding ::  Agricola -> Color -> Building -> Rational
 scoreBuilding _ _ Stall = 1
 scoreBuilding _ _ Stable = 4
@@ -678,6 +708,7 @@ scoreBuilding agri col Storage = fromInteger goodcount / 2
 scoreBuilding _ _ Shelter = 0
 scoreBuilding _ _ OpenStable = 2
 
+-- Scores for animals, accoring to the scoring rules
 scoreAnimal :: Animal -> Integer -> Integer
 scoreAnimal Sheep n | n >= 13 =  n + (n - 13) + 3
 scoreAnimal Sheep n | n >= 11 =  n + 2
@@ -731,6 +762,7 @@ finalScore agri = final
                         , show (losers :: Double)
                         ]
 
+-- The starting state of the game
 startingState :: Agricola
 startingState = emptyAgricola &~ do
   player Blue %=  initPlayer

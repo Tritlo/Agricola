@@ -11,6 +11,7 @@ import Data.Function
 import Data.List
 import Control.Monad
 
+-- Functions for rendering the game
 
 drawLines :: Integral a => a -> a -> [String] -> Update a
 drawLines n _ [] = return n
@@ -25,13 +26,11 @@ drawFarm agri col = drawLines oy ox $
                     lines $ show (agri ^. (player col . farm))
                     where (ox,oy) = farmOffset agri col
 
-
 drawSupply :: Agricola -> Ag.Color -> Integer -> Update Integer
 drawSupply agri color start =
   drawLines (start + 1) fx $
   lines $ show $ agri ^. (player color . supply)
   where (fx,_) = farmOffset agri color
-
 
 drawBoard :: Agricola ->  Update Integer
 drawBoard agri =
@@ -46,7 +45,6 @@ instructions = "Press (b) to place border." ++ "\n"
                ++ "Press (A) to take an animal from a tile.\n"
                ++ "Press (space) to " ++ show EndTurn ++ ".\n"
                ++ "Press (enter) to " ++ show EndPhase ++ ".\n"
-
 
 
 drawControls :: [[Button]] ->  Update Integer
