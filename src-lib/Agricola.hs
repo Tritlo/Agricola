@@ -377,9 +377,14 @@ duoTileLens CowsAndPigs = cowsAndPigs
 duoTileLens HorsesAndSheep = horsesAndSheep
 
 
+specialTileLens
+  :: Functor f =>
+     GameBoardTile
+     -> (SpecialBoardTile -> f SpecialBoardTile)
+     -> Gameboard -> f Gameboard
 specialTileLens SpecialBuilding = specialBuilding
 
-
+-- Descriptions of the actions for the gameboard tiles
 instrs :: GameBoardTile -> String
 instrs SmallForest = unlines ["Get Starting marker"] ++ "and take"
 instrs WoodFence = unlines ["","unlimited"] ++ "1 Wood -> Fence"
@@ -423,7 +428,8 @@ center max s | even diff = replicate hdiff ' ' ++ s ++ replicate hdiff ' '
   where diff = max - length s
         hdiff = diff `div` 2
 
-
+-- print the gameboard borders
+gameBoardBorder :: Int -> Int -> [Char]
 gameBoardBorder maxlen num =
   concat ["+",intercalate "+" $ replicate  num $ replicate maxlen '-', "+","\n"]
 
@@ -457,6 +463,9 @@ emptyBoard = Gameboard {
   , _specialBuilding = (Nothing,Nothing)
                        }
 
+-- The remove Worker functions remove worker tokens from
+-- gameboard tiles
+
 removeWorkerOfSingle :: MonoBoardTile -> MonoBoardTile
 removeWorkerOfSingle (Left _) = Right 0
 removeWorkerOfSingle a = a
@@ -465,7 +474,6 @@ removeWorkerOfAnimals :: DuoBoardTile -> DuoBoardTile
 removeWorkerOfAnimals (Left _) = Right (0, 0)
 removeWorkerOfAnimals a = a
 
-
 removeWorkerOfTile :: GameBoardTile -> Gameboard -> Gameboard
 removeWorkerOfTile t b
   | tileType t == Mono = b & monoTileLens t .~ (Right 0)
@@ -473,19 +481,20 @@ removeWorkerOfTile t b
   | tileType t == Duo = b &  duoTileLens t .~ (Right (0,0))
   | tileType t == Special = b & specialTileLens t .~ (Nothing, Nothing)
 
-
+-- Remove all worker tokens from the gameboard
 takeWorkers :: Gameboard -> Gameboard
 takeWorkers board = board &~ do
   mapM_ (\t -> id %= removeWorkerOfTile t)
     $ concat $ gameBoardLayout
 
 
--- Workers must have been remove prior.
+-- Workers must have been removed prior.
 refillAnimals :: DuoBoardTile -> DuoBoardTile
 refillAnimals (Right (0,0)) = Right (1,0)
 refillAnimals (Right (a,b)) = Right (a,b+1)
 
-
+-- Refill the gameboard with the goods that go with
+-- each space
 refillBoard :: Gameboard -> Gameboard
 refillBoard board = board &~ do
   smallForest %= fmap (+ 1)
@@ -505,6 +514,7 @@ instance Show Phase where
   show BreedingPhase = "Breeding phase"
   show Finished = "Game is over!"
 
+-- Definition of a game instance
 data Agricola = Agricola { _red :: Player
                          , _blue :: Player
                          , _global :: GlobalSupply
@@ -517,7 +527,6 @@ data Agricola = Agricola { _red :: Player
                          } deriving (Show)
 
 makeLenses ''Agricola
-
 
 emptyAgricola :: Agricola
 emptyAgricola = Agricola {_red = emptyPlayer Red
@@ -600,7 +609,6 @@ instance Show Building where
   show Stall             = "Stall"
   show Stable            = "Stable"
   show Cottage           = "Cottage"
-  -- show HalfTimberedHouse = "Half Timbered House"
   show HalfTimberedHouse = "HalfT House"
   show Storage           = "Storage"
   show Shelter           = "Shelter"
@@ -613,6 +621,7 @@ instance Show Animal where
   show Cow  = "Cow"
   show Horse = "Horse"
 
+-- Fill the tiles with spaces to make them equal sized
 fillWithW :: String -> String
 fillWithW s = concat $ replicate tileStrLength s
 
@@ -632,7 +641,6 @@ instance Show Border where
   show (Border H True) = fillWithW "+"
 
 
-
 showTro :: Bool -> String
 showTro False = center lenLongestTileItem ""
 showTro True = center lenLongestTileItem "Trough"
@@ -641,13 +649,14 @@ showAn :: Maybe (Animal, Integer) -> String
 showAn Nothing = center lenLongestTileItem "No Animals"
 showAn (Just (an, count)) = center lenLongestTileItem $ show count ++ " " ++ show an
 
-
+-- the half-timbered house has the longest name
 lenLongestTileItem = length $ show HalfTimberedHouse
 
 showBu :: Maybe Building -> String
 showBu Nothing = center lenLongestTileItem ""
 showBu (Just bu) = center lenLongestTileItem $ show bu
 
+minLengthStringPrepend :: Int -> [Char] -> [Char]
 minLengthStringPrepend len str | length str >= len = str
 minLengthStringPrepend len str = replicate diff ' ' ++ str
   where
@@ -685,8 +694,6 @@ _setBorder V n m farm nb@(Border V _) = farm & singular
                                         (vborders . element (fromInteger n) . element (fromInteger m))
                                         .~ nb
 
-
-
 border :: Alignment -> Integer -> Integer -> Lens' Farm Border
 border al n m = lens (_border al n m) (_setBorder al n m)
 
@@ -703,7 +710,8 @@ _setTile n m farm newtile = farm & singular
 tile :: Integer -> Integer -> Lens' Farm Tile
 tile n m = lens (_tile n m) (_setTile n m)
 
-
+-- At the beginning of the game each farm is empty except
+-- for one cottage
 startingFarm :: Farm
 startingFarm = emptyFarm & tile 2 0 . building .~ Just Cottage
 
@@ -712,17 +720,17 @@ player Red = red
 player Blue = blue
 player No = error "Attempted to use no player"
 
-
+-- Initialize player
 initPlayer :: Player -> Player
 initPlayer player = player &~ do
   (supply . borders) .= 9
   workers .= 3
   farm .= startingFarm
 
-
+-- Number of expansions in use
 totalNumExpansions agri = numberOfExpansions Red agri + numberOfExpansions Blue agri
 
-
+-- Offset for cursor actions
 farmOffset :: Agricola -> Color -> Coord
 farmOffset agri Red = (x,29)
   where x = max 0 $ middle - max (numexpR+1) 3 * expXVol  - (numexpB `div` 2)*expXVol
@@ -738,12 +746,12 @@ farmOffset agri Blue = (x,fyr)
         numexpR = numberOfExpansions Red agri
         spacebetween = 24 `div` (numexpR + 1)
 
-
+-- Minimum screen size needed to render game
 minScreenSize :: Coord
 minScreenSize = (47,123)
 
+middle :: Integer
 middle = snd minScreenSize `div` 2
-
 
 boardOffset :: Coord
 boardOffset = (x,8)
@@ -787,6 +795,7 @@ defaultControls = [
   ]
 
 
+-- Number of expansions on the given player's farm
 numberOfExpansions ::  Color -> Agricola -> Integer
 numberOfExpansions col agri =
   toInteger $ sum $ map (fromEnum . _isExpansion . head) $ transpose ts
@@ -794,7 +803,6 @@ numberOfExpansions col agri =
 
 farmVolume :: Agricola -> Color -> Measurements
 farmVolume agri col = volume (agri ^. (player col . farm))
-
 
 
 showFarmMapLine :: [Maybe (Either Tile Border)] -> String
@@ -818,6 +826,8 @@ subSeqSum = subSeqSum' [] 0
         subSeqSum' ys s (x:xs) = subSeqSum' ((x + s):ys) (x+s) xs
 
 
+-- Functions to find which part of a farm has been clicked
+
 farmMapLineLengths :: [Maybe (Either Tile Border)] -> [Integer]
 farmMapLineLengths (Nothing:xs) = 1 : farmMapLineLengths xs
 farmMapLineLengths (Just (Right b):xs) =
@@ -827,6 +837,7 @@ farmMapLineLengths (Just (Left t):xs)  =
 farmMapLineLengths [] = []
 
 
+farmMapLengths :: [[Maybe (Either Tile Border)]] -> [Integer]
 farmMapLengths  = head .  map farmMapLineLengths
 
 farmMapLineHeights :: [Maybe (Either Tile Border)] -> [Integer]
@@ -838,4 +849,5 @@ farmMapLineHeights (Just (Left t):xs)  =
 farmMapLineHeights [] = []
 
 
+farmMapHeights :: [[Maybe (Either Tile Border)]] -> [Integer]
 farmMapHeights =  map (head .farmMapLineHeights)
