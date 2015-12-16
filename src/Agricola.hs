@@ -10,7 +10,7 @@ import Data.List
 import Test.QuickCheck
 import Control.Monad.State
 import Data.Char (toUpper, toLower)
-
+import qualified Test.QuickCheck as QC
 
 type Coord = (Integer, Integer)
 
@@ -55,7 +55,9 @@ data Building = Stall | Stable | Cottage |
                 HalfTimberedHouse | Storage | Shelter |
                 OpenStable
                 deriving (Eq)
-
+instance Arbitrary Building where
+  arbitrary = QC.elements [Stall,Stable,Cottage,HalfTimberedHouse,Storage,Shelter,OpenStable]
+  
 data GlobalSupply = GlobalSupply { _troughs :: Integer
                                  , _stalls :: Integer
                                  , _expansions :: Integer
@@ -85,7 +87,12 @@ globalBuildingLens Stall = stalls
 
 data Animal = Sheep | Pig | Cow | Horse deriving (Eq, Ord)
 
-animalLens :: Functor f => Animal -> (Integer -> f Integer) -> Animals -> f Animals
+instance Arbitrary Animal where
+  arbitrary = QC.elements [Sheep,Pig,Cow,Horse]
+  
+animalLens
+  :: Functor f =>
+     Animal -> (Integer -> f Integer) -> Animals -> f Animals
 animalLens Sheep = sheep
 animalLens Pig = pigs
 animalLens Cow = cows
@@ -93,18 +100,29 @@ animalLens Horse = horses
 
 data Good = Wood | Stone | Reed | Fence deriving (Eq,Show)
 
-goodLens :: Functor f => Good -> (Integer -> f Integer) -> Supply -> f Supply
+goodLens
+  :: Functor f =>
+     Good -> (Integer -> f Integer) -> Supply -> f Supply
 goodLens Wood = wood
 goodLens Stone = stones
 goodLens Reed = reeds
 goodLens Fence = borders
 
 data Alignment = H | V deriving (Eq, Show)
+
+instance Arbitrary Alignment where
+  arbitrary = QC.elements [H,V]
+  
 data Border = Border {  _alignment ::  Alignment
                       , _isThere   :: Bool
-                      }
+                      } deriving (Eq)
 
 makeLenses ''Border
+
+instance Arbitrary Border where
+  arbitrary = do al <- arbitrary
+                 there <- arbitrary
+                 return (Border al there)
 
 data Tile = Tile { _building :: Maybe Building
                  , _tileanimals :: Maybe (Animal, Integer)
@@ -116,12 +134,25 @@ makeLenses ''Tile
 emptyTile :: Tile
 emptyTile = Tile Nothing Nothing False
 
+instance Arbitrary Tile where
+  arbitrary = do b <- arbitrary
+                 ta <- arbitrary
+                 t <- arbitrary
+                 return $ Tile b ta t
+                 
 data Farm = Farm { _tiles :: [[Tile]]
                  , _vborders :: [[Border]]
                  , _hborders :: [[Border]]
                  }
 makeLenses ''Farm
 
+instance Arbitrary Farm where
+  arbitrary = do
+    ts <- arbitrary
+    vs <- arbitrary
+    hs <- arbitrary
+    return $ Farm ts vs hs
+    
 type Measurements = (Integer, Integer)
 
 capitalize "" = ""
@@ -227,7 +258,6 @@ data Gameboard = Gameboard {
 makeLenses ''Gameboard
 
 
-
 append :: MonadState [a] m => [a] -> m ()
 append s = id %= flip (++) s
 
@@ -239,11 +269,11 @@ data TileType = Unit
               deriving (Eq, Show)
 
 
-data GameBoardTile =   SmallForest 
-                     | BigForest 
-                     | SmallQuarry 
-                     | BigQuarry 
-                     | Expand 
+data GameBoardTile =   SmallForest
+                     | BigForest
+                     | SmallQuarry
+                     | BigQuarry
+                     | Expand
                      | WoodFence
                      | StoneWall
                      | Resources
@@ -305,9 +335,6 @@ gameBoardLayout = [ [SmallForest, BigForest, SmallQuarry, BigQuarry]
                   , [BuildStall, BuildTroughs, Millpond, PigsAndSheep]
                   , [BuildStable, SpecialBuilding, CowsAndPigs, HorsesAndSheep]
                   ]
-
-
-
 
 
 monoTileLens
@@ -626,9 +653,7 @@ instance Volume Tile
 instance Volume Farm
 instance Volume Building
 instance Volume Border
-
 instance Volume Gameboard
-
 
 
 printFarm :: Farm -> IO()
@@ -648,10 +673,12 @@ _setBorder V n m farm nb@(Border V _) = farm & singular
                                         (vborders . element (fromInteger n) . element (fromInteger m))
                                         .~ nb
 
+prop_borderGetSet :: Alignment -> Integer -> Integer -> Farm -> Border -> Bool
+prop_borderGetSet al n m f b = _border al n m (_setBorder al n m f b) == b 
+
+
 border :: Alignment -> Integer -> Integer -> Lens' Farm Border
 border al n m = lens (_border al n m) (_setBorder al n m)
-
-
 
 
 -- Getters and setters for a tile
@@ -778,3 +805,6 @@ farmMapLineHeights [] = []
 
 
 farmMapHeights =  map (head .farmMapLineHeights)
+
+--main :: IO ()
+--main = quickCheck prop_borderGetSet
