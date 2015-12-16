@@ -76,7 +76,7 @@ prop_borderGetSet = monadic runIdentity $ do
 
 checkBorders :: Test
 checkBorders = testGroup "Borders" [
-  testProperty "borderGetSet" prop_borderGetSet
+  testProperty "border can be fetched and set" prop_borderGetSet
                                    ]
 prop_tileGetSet :: Property
 prop_tileGetSet = monadic runIdentity $ do
@@ -86,10 +86,20 @@ prop_tileGetSet = monadic runIdentity $ do
   farm <- pick $ arbitraryFarmWithAtLeast pm
   assert $ _tile n (m-1) (_setTile n (m-1) farm t) == t
 
+
+prop_canGetPositivePoints :: Property
+prop_canGetPositivePoints = monadic runIdentity $ do
+  a <- pick  infiniteList
+  assert $ any (\agri -> finalPlayerScore Red agri > 0 || finalPlayerScore Blue agri > 0) a
+
 checkTiles :: Test
 checkTiles = testGroup "Tiles" [
-  testProperty "tileGetSet" prop_tileGetSet
+  testProperty "tiles can be gotten and set" prop_tileGetSet
                                ]
+
+
+
+
 instance Arbitrary Color where
   arbitrary = elements [Red,Blue]
 
@@ -187,5 +197,11 @@ instance Arbitrary Action where
               , (5, return $ MultiAction [TakeExpand, PlaceExpand bool])
               , (20 , return $ MultiAction [StartBuilding build, PlaceBuilding build n m] )
               ]
+
+checkPoints :: Test
+checkPoints = testGroup "Points" [
+  testProperty "Positive points can be had" prop_canGetPositivePoints
+                               ]
+
 tests :: IO [Test]
-tests = return [checkBorders,checkTiles]
+tests = return [checkBorders,checkTiles, checkPoints]
