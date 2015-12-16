@@ -25,7 +25,7 @@ If you've already gotten the dependencies installed. If there are any problems,
 `cabal` should  be able to point you in the right direction.
 
 Which creates a `cabal` sandbox and installs into that the required dependencies.
-This requires `cabal >= 1.22`.
+This requires `cabal >= 1.22`, and ghc `7.10.2` or later (I think, untested otherwise).
 
 To run the tests of which there admittedly very few of, you can run
 
