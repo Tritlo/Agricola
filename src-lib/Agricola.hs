@@ -730,16 +730,17 @@ farmOffset agri Blue = (x,fyr)
 
 
 minScreenSize :: Coord
-minScreenSize = (47,139)
+minScreenSize = (47,123)
 
 middle = snd minScreenSize `div` 2
 
 
 boardOffset :: Coord
-boardOffset = (23,8)
+boardOffset = (x,8)
+  where x = middle - (fst (volume emptyBoard) `div` 2)
 
 controlsOffset :: Coord
-controlsOffset = (0,2)
+controlsOffset = (2,2)
 
 
 data Button =   StopButton
@@ -828,6 +829,3 @@ farmMapLineHeights [] = []
 
 
 farmMapHeights =  map (head .farmMapLineHeights)
-
---main :: IO ()
---main = quickCheck prop_borderGetSet

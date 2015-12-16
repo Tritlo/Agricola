@@ -372,41 +372,6 @@ buildSpecialBuildingInteraction agri = do
         getBP b = lift $ lift $ placeBuildingInteraction b (cht b) agri
 
 
--- buildSpecialBuildingInteraction :: Agricola -> Curses (Maybe Action)
--- buildSpecialBuildingInteraction agri = do
---   if (hasWorkers agri &&  boardSpaceFree agri (StartBuilding Shelter))
---     then
---       do
---         cho <- chooseBuildingInteraction "Choose a special building to build." agri
---         case cho of
---           Just sb@(StartBuilding b) -> do
---             let prob = isProblem agri sb
---             case prob of
---               Just err -> return $ Just (SetMessage $ concat ["Cannot " , show sb , ", since " , err , "."])
---               Nothing -> do
---                   pb <- placeBuildingInteraction b ("Choose tile to place " ++ show b ++ " on:") agri
---                   case pb of
---                     Nothing -> return $ Just DoNothing
---                     Just pb -> case b of
---                       OpenStable -> do
---                         mbres <- chooseResourceInteraction 3 [Stone, Wood] "Choose building material for open stable." agri
---                         case mbres of
---                           Just spendr -> do
---                             an <- chooseAnimalInteraction [Cow,Horse] ("Choose animal to get:") agri
---                             case an of
---                               Just geta -> return $ Just (MultiAction [spendr, sb,pb,geta])
---                               Nothing -> return $ Just DoNothing
---                           Nothing -> return $ Just DoNothing
---                       Shelter -> do
---                         an <- chooseAnimalInteraction [Cow,Horse,Sheep,Pig] ("Choose animal to get:") agri
---                         case an of
---                           Just geta -> return $ Just $ MultiAction [sb,pb,geta]
---                           Nothing -> return $ Just DoNothing
---                       _ -> return $ Just  (MultiAction [sb, pb])
---           _ -> return $ Just DoNothing
---     else return $ Just (SetMessage "Cannot build a special building, since you cannot put a worker on the gameboard tile.")
-
-
 buildStableInteraction :: Agricola -> Curses (Maybe Action)
 buildStableInteraction =
   multiActionInteraction
@@ -476,7 +441,7 @@ mouseClick (mx,my) agri =
 resized :: Curses (Maybe Action)
 resized = do
   (sx,sy) <- screenSize
-  return $ Just (SetMessage ("Screen resized to" ++ show (sx,sy)))
+  return $ Just (SetMessage ("Screen resized to " ++ show (sx,sy)))
 
 
 
@@ -487,11 +452,27 @@ getAction (EventCharacter 'Q')      = const $ return Nothing
 getAction (EventCharacter ' ')      = \ag -> getCursorCoord >>= (flip mouseClick ag)
 getAction (EventCharacter '\n')     = const $ return $ Just EndTurn
 getAction (EventCharacter 'e')     = const $ return $ Just EndTurn
-getAction (EventCharacter 'E')     = const $ return $ Just EndPhase
-getAction (EventCharacter 's')      = const $ return $ Just (SpendResources Stone $ -1)
-getAction (EventCharacter 'w')      = const $ return $ Just (SpendResources Wood $ -1)
-getAction (EventCharacter 'r')      = const $ return $ Just (SpendResources Reed $ -1)
-getAction (EventCharacter 'b')      = placeBorderInteraction "Choose border to place"
+-- Cheats
+-- Resources
+getAction (EventCharacter 's')      = const $ return $ Just (SpendResources Stone $ -5)
+getAction (EventCharacter 'w')      = const $ return $ Just (SpendResources Wood $ -5)
+getAction (EventCharacter 'r')      = const $ return $ Just (SpendResources Reed $ -5)
+
+-- Animals
+getAction (EventCharacter 'S')      = const $ return $ Just (ChooseAnimal Sheep)
+getAction (EventCharacter 'P')      = const $ return $ Just (ChooseAnimal Pig)
+getAction (EventCharacter 'C')      = const $ return $ Just (ChooseAnimal Cow)
+getAction (EventCharacter 'H')      = const $ return $ Just (ChooseAnimal Horse)
+
+-- Expand
+getAction (EventCharacter 'E')     = \agri -> do
+ ex <- (runActionM $ expandInteraction agri)
+ case ex of
+   Just (MultiAction [TakeExpand,p]) -> return $ Just p
+   x -> return x
+getAction (EventCharacter 'b')      = placeBorderInteraction "Choose border to place:"
+getAction (EventCharacter 't')      = placeTroughInteraction "Choose tile to place trough on:"
+
 getAction (EventCharacter char)     = const $ return $ Just DoNothing
 getAction (EventSpecialKey key)     = const $ return $ Just DoNothing
 getAction EventResized              = const resized

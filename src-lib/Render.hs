@@ -9,6 +9,7 @@ import Update
 import Data.Maybe
 import Data.Function
 import Data.List
+import Control.Monad
 
 
 drawLines :: Integral a => a -> a -> [String] -> Update a
@@ -50,11 +51,11 @@ instructions = "Press (b) to place border." ++ "\n"
 
 drawControls :: [[Button]] ->  Update Integer
 drawControls bs = drawLines y x [
-  "+" ++ (intercalate "+" (map (\(_,y) -> replicate y '-') line1pairs)) ++ "+"
+  "+" ++ intercalate "+" (map (\(_,y) -> replicate y '-') line1pairs) ++ "+"
   , "|" ++ concatMap (\(x,y) -> ((++ "|") . center y . show) x ) line1pairs
-  , "+" ++ (intercalate "+" (map (\(_,y) -> replicate y '-') line1pairs)) ++ "+"
+  , "+" ++ intercalate "+" (map (\(_,y) -> replicate y '-') line1pairs) ++ "+"
   , "|" ++ concatMap (\(x,y) -> ((++ "|") . center y . show) x ) line2pairs
-  , "+" ++ (intercalate "+" (map (\(_,y) -> replicate y '-') line1pairs)) ++ "+"
+  , "+" ++ intercalate "+" (map (\(_,y) -> replicate y '-') line1pairs) ++ "+"
   ]
   where (x,y) = controlsOffset
         line1 = head bs
@@ -68,12 +69,13 @@ drawControls bs = drawLines y x [
 drawPlayer agri col = do
      end <- drawFarm agri col
      end <- drawSupply agri col end
+     when (agri ^. starting == col) $ do
+       moveCursor end $ fst $ farmOffset agri col
+       drawString $ show $ agri ^. (player col . color)
+       drawString " is the starting player."
      moveCursor (end + 1) $ fst $ farmOffset agri col
      drawString $ show $ agri ^. (player col . color)
-     drawString $ " has " ++ show  (agri ^. (player col . workers)) ++ " workers"
-     if agri ^. starting == col
-       then drawString " and is the starting player."
-       else drawString "."
+     drawString $ " has " ++ show  (agri ^. (player col . workers)) ++ " workers avabilable."
      return end
 
 
