@@ -143,7 +143,9 @@ getCursorCoord = do
 
 
 
-interaction :: String -> (Agricola -> Coord -> Curses (Maybe Action)) -> Agricola -> Curses (Maybe Action)
+interaction :: String
+            -> (Agricola -> Coord -> Curses (Maybe Action))
+            -> Agricola -> Curses (Maybe Action)
 interaction msg click agri = do
   ev <- dispMsgAtTopAndWaitForInput msg
   case ev of

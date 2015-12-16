@@ -131,7 +131,8 @@ renderGame agri = do
       then do clear
               drawString $ "The current sceen size (" ++ show scz ++ ") is to small!"
               moveCursor 1 0
-              drawString $ "Please make sure that the screen is at least " ++ show minScreenSize ++" by fullscreening, or shrinking font."
+              drawString $ "Please make sure that the screen is at least "
+                ++ show minScreenSize ++" by fullscreening, or shrinking font."
       else drawState agri colRed colBlue colWhite
     setColor colWhite
     moveCursor my mx

@@ -539,33 +539,6 @@ isEnclosed agri c = not $ null $ enclosedWith f c
         f = agri ^. (player col . farm)
 
 
--- testFarm = emptyFarm &~ do
---   border H 0 0 . isThere .= True
---   border H 1 0 . isThere .= True
---   border H 0 1 . isThere .= True
---   border H 1 1 . isThere .= True
---   border V 0 0 . isThere .= True
---   border V 0 2 . isThere .= True
-
--- testFarm2 = startingFarm &~ do
---   border H 1 0 . isThere .= True
---   border V 1 0 . isThere .= True
---   border V 1 1 . isThere .= True
-
-testFarm3 = expandFarm True startingFarm &~  do
-   border H 0 0 . isThere .= True
-   border V 0 0 . isThere .= True
-   border V 0 1 . isThere .= True
-   border V 1 0 . isThere .= True
-   border V 1 1 . isThere .= True
-   border V 2 0 . isThere .= True
-   border H 3 0 . isThere .= True
-   -- tile 2 0 . trough .= True
-   -- tile 1 0 . trough .= True
-   -- tile 0 0 . trough .= True
-
-
-
 coordInDirection :: Coord -> Direction -> Coord
 coordInDirection (cn,cm) N = ( cn - 1, cm)
 coordInDirection (cn,cm) S = ( cn + 1, cm)
@@ -594,17 +567,17 @@ buildingCapacity Shelter = 1
 
 animalCapacity :: Agricola -> Coord -> Integer
 animalCapacity agri c@(cx,cy) =
-  case (agri ^. player col . farm . tile cx cy . building) of
-  Just b -> (buildingCapacity b)*(2^t)
-  Nothing -> if (isEnclosed agri c)
-             then  2 ^ (1 + troughNum agri c)
-             else t
+  case agri ^. player col . farm . tile cx cy . building of
+  Just b -> buildingCapacity b*(2^t)
+  Nothing | isEnclosed agri c -> 2 ^ (1 + troughNum agri c)
+          | otherwise -> t
   where col = agri ^. whoseTurn
         t   = hasTrough agri c
 
 animalSpace :: Agricola -> Coord -> Integer
-animalSpace agri c@(cx,cy) | isNothing tileAn = animalCapacity agri c
-                           | otherwise = animalCapacity agri c - snd (fromJust tileAn)
+animalSpace agri c@(cx,cy)
+  | isNothing tileAn = animalCapacity agri c
+  | otherwise = animalCapacity agri c - snd (fromJust tileAn)
     where
       col = agri ^. whoseTurn
       tileAn = agri ^. player col . farm . tile cx cy . tileanimals
@@ -623,8 +596,9 @@ troughNum agri coord = toInteger $ length $ filter hast encw
         hast c@(cx,cy) = f ^. tile cx cy . trough
 
 hasTrough :: Agricola -> Coord -> Integer
-hasTrough agri (cx,cy) | agri ^. player col . farm . tile cx cy . trough = 1
-                       | otherwise = 0
+hasTrough agri (cx,cy)
+  | agri ^. player col . farm . tile cx cy . trough = 1
+  | otherwise = 0
   where col = agri ^. whoseTurn
 
 
@@ -661,7 +635,7 @@ scoreBuilding _ _ Stall = 1
 scoreBuilding _ _ Stable = 4
 scoreBuilding _ _ Cottage = 0
 scoreBuilding _ _ HalfTimberedHouse = 5
-scoreBuilding agri col Storage = (fromInteger goodcount) / 2
+scoreBuilding agri col Storage = fromInteger goodcount / 2
   where sup = agri ^. player col . supply
         goodcount = sum (map (\g -> sup ^. goodLens g) [Wood, Stone, Reed])
 scoreBuilding _ _ Shelter = 0
