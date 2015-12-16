@@ -132,7 +132,7 @@ data Tile = Tile { _building :: Maybe Building
                  , _tileanimals :: Maybe (Animal, Integer)
                  , _trough :: Bool
                  , _expansion :: Maybe Integer
-                 }
+                 } deriving (Eq)
 
 makeLenses ''Tile
 
@@ -828,6 +828,3 @@ farmMapLineHeights [] = []
 
 
 farmMapHeights =  map (head .farmMapLineHeights)
-
---main :: IO ()
---main = quickCheck prop_borderGetSet
