@@ -87,6 +87,7 @@ prop_tileGetSet = monadic runIdentity $ do
   assert $ _tile n (m-1) (_setTile n (m-1) farm t) == t
 
 
+-- This is mainly for forcing a playtrough
 prop_canGetPositivePoints :: Property
 prop_canGetPositivePoints = monadic runIdentity $ do
   a <- pick  infiniteList
