@@ -359,95 +359,89 @@ workerActions = [ TakeResources
                    | b <- [Stable, OpenStable, HalfTimberedHouse , Storage , Shelter, Stall]]
 
 isProblem :: Agricola -> Action ->  Maybe String
-isProblem agri (SetMessage _) = Nothing
-isProblem agri (ChooseAnimal _) = Nothing
-isProblem agri (PlaceExpand _) = if (agri ^. global . expansions) <= 0
-                                    then Just "there are no expansion left in the global supply."
-                                    else Nothing
-isProblem agri EndTurn = if hasWorkers agri && not (agri ^. hasPlacedWorker)
-                         then Just $ show col ++ " has to place worker"
-                         else if hasAnimalsInSupply agri
-                              then Just $ show col ++ " has unplaced animals, free them or place 'em"
-                              else Nothing
+isProblem agri (PlaceExpand _)
+  | (agri ^. global . expansions) <= 0 =
+      Just "there are no expansion left in the global supply."
+
+isProblem agri EndTurn
+  | hasWorkers agri && not (agri ^. hasPlacedWorker) = Just $ show col ++ " has to place worker"
+  | hasAnimalsInSupply agri = Just $ show col ++ " has unplaced animals, free them or place 'em"
   where col = agri ^. whoseTurn
 isProblem agri EndPhase =
   case isProblem agri EndTurn of
-  Just s -> Just s
   Nothing -> case isProblem (agri & whoseTurn %~ otherColor) EndTurn of
-    Just s -> Just s
-    Nothing -> if (agri ^. (red . workers) > 0) || (agri ^. (blue . workers) > 0)
-               then Just "some players have unplaced workers"
-               else Nothing
-isProblem _ DoNothing = Nothing
+    Nothing  | agri ^. (red . workers) > 0 -> Just "red has unplaced workers."
+    Nothing  | agri ^. (blue . workers) > 0 -> Just "blue has unplaced workers."
+    x -> x
+  x -> x
 
-isProblem agri (PlaceBorder al cx cy) =
-  if hasBorders agri col 
-     then if freeSpace agri col al cx cy
-          then Nothing
-          else Just "there is already a border there"
-     else Just "you don't have enough borders"
+isProblem agri (PlaceBorder al cx cy)
+  | not (hasBorders agri col) = Just "you don't have enough borders"
+  | not (freeSpace agri col al cx cy) = Just "there is already a border there"
   where col = agri ^. whoseTurn
 
-isProblem agri (TakeAnimal cx cy) = if not (hasAnimals agri cx cy)
-                                    then Just "there is no animal on that tile."
-                                    else Nothing
+isProblem agri (TakeAnimal cx cy)
+  |  not (hasAnimals agri cx cy) = Just "there is no animal on that tile."
 
-isProblem agri (PlaceAnimal ani cx cy) = if (agri ^. (player col . supply . animals . animalLens ani) == 0)
-                                         then Just $ "there is no " ++ map toLower (show ani) ++ " to place"
-                                         else case (isSameAnimal agri col c ani) of
-                                           Just an -> Just $  "there is already a " ++ map toLower (show an) ++ " there"
-                                           Nothing -> if animalSpace agri c <= 0
-                                                      then Just "there is not enough room there"
-                                                      else Nothing
-                                          where col = agri ^. whoseTurn
-                                                c = (cx,cy)
-isProblem agri (FreeAnimal an) =
-  if agri ^. (player col . supply . animals . animalLens an) == 0
-     then Just "you have none in your supply"
-     else Nothing
+isProblem agri (PlaceAnimal ani cx cy)
+  | agri ^. (player col . supply . animals . animalLens ani) == 0 =
+      Just $ "there is no " ++ map toLower (show ani) ++ " to place"
+  | otherwise = case isSameAnimal agri col c ani of
+    Just an -> Just $  "there is already a " ++ map toLower (show an) ++ " there"
+    Nothing |  animalSpace agri c <= 0 -> Just "there is not enough room there"
+    _ -> Nothing
   where col = agri ^. whoseTurn
-isProblem agri (SpendResources good n) =
-  if agri ^. (player col . supply . goodLens good) < n
-     then Just ("you do not have enough " ++ map toLower (show good) ++ " in your supply")
-     else Nothing
+        c = (cx,cy)
+
+isProblem agri (FreeAnimal an)
+  | agri ^. (player col . supply . animals . animalLens an) == 0 =
+      Just "you have none in your supply"
   where col = agri ^. whoseTurn
-isProblem agri (PlaceTrough cx cy) =
-  if (agri ^. player col . farm . tile cx cy. trough)
-  then Just "there is already a trough on that tile"
-  else
-    if (agri ^. global . troughs <= 0)
-    then Just "there are no troughs left in the game components"
-    else Nothing
+
+isProblem agri (SpendResources good n)
+  | agri ^. (player col . supply . goodLens good) < n =
+      Just ("you do not have enough " ++ map toLower (show good) ++ " in your supply")
   where col = agri ^. whoseTurn
-isProblem agri (PlaceBuilding Stable cx cy) =
-  if (agri ^. player col . farm . tile cx cy. building) /= Just Stall
-  then Just "there is no stall on that tile"
-  else Nothing
+
+isProblem agri (PlaceTrough cx cy)
+  | agri ^. player col . farm . tile cx cy. trough =
+      Just "there is already a trough on that tile"
+  | agri ^. global . troughs <= 0 =
+      Just "there are no troughs left in the game components"
   where col = agri ^. whoseTurn
-isProblem agri (PlaceBuilding OpenStable cx cy) =
-  if (agri ^. player col . farm . tile cx cy. building) /= Just Stall
-  then Just "there is no stall there"
-  else Nothing
+
+isProblem agri (PlaceBuilding Stable cx cy)
+  | (agri ^. player col . farm . tile cx cy. building) /= Just Stall =
+      Just "there is no stall on that tile"
+  | otherwise = Nothing
   where col = agri ^. whoseTurn
-isProblem agri (PlaceBuilding HalfTimberedHouse cx cy) =
-  if (agri ^. player col . farm . tile cx cy. building) /= Just Cottage
-  then Just "there is no cottage there "
-  else Nothing
+
+isProblem agri (PlaceBuilding OpenStable cx cy)
+  | agri ^. player col . farm . tile cx cy. building /= Just Stall =
+      Just "there is no stall there"
+  | otherwise = Nothing
   where col = agri ^. whoseTurn
-isProblem agri (PlaceBuilding b cx cy) =
-  if (isJust (agri ^. player col . farm . tile cx cy. building))
-  then Just "there is already a building on that tile"
-  else Nothing
+
+isProblem agri (PlaceBuilding HalfTimberedHouse cx cy)
+  | agri ^. player col . farm . tile cx cy. building /= Just Cottage =
+      Just "there is no cottage there "
+  | otherwise = Nothing
   where col = agri ^. whoseTurn
+
+isProblem agri (PlaceBuilding b cx cy)
+  | isJust (agri ^. player col . farm . tile cx cy. building) =
+      Just "there is already a building on that tile"
+  where col = agri ^. whoseTurn
+
 isProblem agri action | action `elem` workerActions =
-                        if not (hasWorkers agri)
-                        then return "no workers available"
-                        else if not (boardSpaceFree  agri action)
-                             then return "board space occupied"
-                             else if agri ^. hasPlacedWorker
-                                     then return "worker already placed"
-                                     else isResourceProblem action agri
-isProblem agri a = error $ "did not find legal for " ++ show a
+                        isProblemWorkerAction agri action
+  where isProblemWorkerAction agri action
+          | not (hasWorkers agri) = Just "no workers available"
+          | not (boardSpaceFree agri action) = Just "board space occupied"
+          | agri ^. hasPlacedWorker = Just "worker already placed"
+          | otherwise = isResourceProblem action agri
+
+isProblem _ _ = Nothing
 
 
 buildingResourceProblem :: Building -> Agricola -> Maybe String

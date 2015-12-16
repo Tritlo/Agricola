@@ -7,6 +7,8 @@ import qualified UI.NCurses
 import Control.Lens
 import Update
 import Data.Maybe
+import Data.Function
+import Data.List
 
 
 drawLines :: Integral a => a -> a -> [String] -> Update a
@@ -25,7 +27,7 @@ drawFarm agri col = drawLines oy ox $
 
 drawSupply :: Agricola -> Ag.Color -> Integer -> Update Integer
 drawSupply agri color start =
-  drawLines (start + 1) (2 + fx) $
+  drawLines (start + 1) fx $
   lines $ show $ agri ^. (player color . supply)
   where (fx,_) = farmOffset agri color
 
@@ -46,17 +48,21 @@ instructions = "Press (b) to place border." ++ "\n"
 
 
 
-
 drawControls :: [[Button]] ->  Update Integer
 drawControls bs = drawLines y x [
-  gameBoardBorder maxlen num
-  , "|" ++ concatMap ((++ "|") . center maxlen . show ) (head bs)
-  , gameBoardBorder maxlen num
-  , "|" ++ concatMap ((++ "|") . center maxlen . show)  (last bs)
-  ,gameBoardBorder maxlen num]
+  "+" ++ (intercalate "+" (map (\(_,y) -> replicate y '-') line1pairs)) ++ "+"
+  , "|" ++ concatMap (\(x,y) -> ((++ "|") . center y . show) x ) line1pairs
+  , "+" ++ (intercalate "+" (map (\(_,y) -> replicate y '-') line1pairs)) ++ "+"
+  , "|" ++ concatMap (\(x,y) -> ((++ "|") . center y . show) x ) line2pairs
+  , "+" ++ (intercalate "+" (map (\(_,y) -> replicate y '-') line1pairs)) ++ "+"
+  ]
   where (x,y) = controlsOffset
-        num = maximum $ map length bs
-        maxlen = maximum $ map  (maximum . map (length . show)) bs
+        line1 = head bs
+        line2 = last bs
+        collengths = zipWith (max `on` shownl ) line1 line2
+        line1pairs = zip line1 collengths
+        line2pairs = zip line2 collengths
+        shownl = (+2) . length . show
 
 
 drawPlayer agri col = do

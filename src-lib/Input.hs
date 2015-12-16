@@ -13,6 +13,7 @@ import Update
 import Control.Applicative
 import Control.Monad.Except
 import Control.Monad.Trans.Maybe
+import Data.Function
 
 clickedFarm :: Agricola -> Coord -> Maybe Color
 clickedFarm agri  coord | inBox coord (farmOffset agri Blue) (farmVolume agri Blue) = Just Blue
@@ -63,13 +64,17 @@ clickedControls c@(cx,cy) =
   if inBox c controlsOffset v && tm < length defaultControls && tn < (length . head) defaultControls
     then Just b
     else Nothing
-  where v@(vx,vy) = (toInteger $ (1+longestb)*numbs, 5)
-        numbs = maximum $ map length defaultControls
-        longestb =  maximum $ map (maximum . map (length . show)) defaultControls
+  where
+        line1 = head defaultControls
+        line2 = last defaultControls
+        collengths = zipWith (max `on` shownl ) line1 line2
+        tn =  length $ takeWhile (<= ox) $ subSeqSum collengths
+        tm = fromInteger $ oy `div` (vy `div` 2)
+        vy = 5
+        vx = sum $ collengths
+        v = (vx,vy)
+        shownl = (+3) . toInteger . length . show
         oc@(ox,oy) = c .-. controlsOffset
-        t@(tn,tm) = (
-          fromInteger $ ox `div` ((vx `div` (toInteger $ (length . head) defaultControls))),
-          fromInteger $ oy `div` ((vy `div` (toInteger $ length defaultControls))))
         b = (defaultControls !! tm) !! tn
 
 clickedBoard :: Agricola -> Coord -> Maybe GameBoardTile
