@@ -8,6 +8,8 @@ import Test.QuickCheck.Monadic
 import Control.Monad.Identity
 
 import Agricola
+import Update
+import Data.Maybe
 
 instance Arbitrary Building where
   arbitrary = elements [Stall,Stable,Cottage
@@ -55,9 +57,9 @@ arbitraryFarmWithAtLeast (Positive nrows) = do
     return Farm {_tiles = ts, _vborders = vs , _hborders =hs}
 
 
-legalLineVals :: Alignment -> [Integer]
-legalLineVals V = [0..2]
-legalLineVals H = [0..3]
+legalLineVals :: Alignment -> (Integer,Integer)
+legalLineVals V = (0,2)
+legalLineVals H = (0,3)
 
 leastNumRows :: Alignment -> NonNegative Integer -> Positive Integer
 leastNumRows V (NonNegative m) = Positive (max m 1)
@@ -68,50 +70,39 @@ prop_borderGetSet = monadic runIdentity $ do
   al <- pick  arbitrary
   nb <- pick $ arbitrary `suchThat` ((== al) . _alignment)
   nnm@(NonNegative m) <- pick arbitrary
-  n <- pick $ elements $ legalLineVals al
+  n <- pick $ choose $ legalLineVals al
   farm  <- pick $ arbitraryFarmWithAtLeast $ leastNumRows al  nnm
   assert $ _border al n m (_setBorder al n m farm nb) == nb
 
 checkBorders :: Test
 checkBorders = testGroup "Borders" [
-  testProperty "borderGetSet" prop_borderGetSet
+  testProperty "border can be fetched and set" prop_borderGetSet
                                    ]
 prop_tileGetSet :: Property
 prop_tileGetSet = monadic runIdentity $ do
   t <- pick arbitrary
   pm@(Positive m) <- pick arbitrary
-  n <- pick $ elements [0..2]
+  n <- pick $ choose (0,2)
   farm <- pick $ arbitraryFarmWithAtLeast pm
   assert $ _tile n (m-1) (_setTile n (m-1) farm t) == t
 
+
+-- This is mainly for forcing a playtrough
+prop_canGetPositivePoints :: Property
+prop_canGetPositivePoints = monadic runIdentity $ do
+  a <- pick  infiniteList
+  assert $ any (\agri -> finalPlayerScore Red agri > 0 || finalPlayerScore Blue agri > 0) a
+
 checkTiles :: Test
 checkTiles = testGroup "Tiles" [
-  testProperty "tileGetSet" prop_tileGetSet
+  testProperty "tiles can be gotten and set" prop_tileGetSet
                                ]
-{-
-emptyFarm :: Farm
-emptyFarm = Farm
-            (replicate 3 $ replicate 2 emptyTile)
-            (replicate 3 $ replicate 3 $ Border V False)
-            (replicate 4 $ replicate 2 $ Border H False)
-startingFarm :: Farm
-startingFarm = emptyFarm & tile 2 0 . building .~ Just Cottage
--}
+
+
+
+
 instance Arbitrary Color where
   arbitrary = elements [Red,Blue]
-
-instance Arbitrary GlobalSupply where
-  arbitrary = do
-    (NonNegative t) <- arbitrary
-    (NonNegative s) <- arbitrary
-    (NonNegative e) <- arbitrary
-    (NonNegative g) <- arbitrary
-    (NonNegative ht) <- arbitrary
-    (NonNegative st) <- arbitrary
-    (NonNegative sh) <- arbitrary
-    (NonNegative os) <- arbitrary
-    return $ GlobalSupply t s e g ht st sh os
-
 
 instance Arbitrary Animals where
   arbitrary = do
@@ -130,63 +121,88 @@ instance Arbitrary Supply where
     a <- arbitrary
     return $ Supply b w s r a
 
-instance Arbitrary Player where
-  arbitrary = do
-    f <- arbitrary
-    s <- arbitrary
-    (NonNegative w) <- arbitrary
-    c <- arbitrary
-    return $ Player f s w c
 
-instance Arbitrary Phase where
-  arbitrary = elements [WorkPhase,BreedingPhase,Finished]
 
-instance Arbitrary Gameboard where
-  arbitrary = do
-    sf <- arbitrary
-    bf <- arbitrary
-    sq <- arbitrary
-    bq <- arbitrary
-    ex <- arbitrary
-    wf <- arbitrary
-    sw <- arbitrary
-    re <- arbitrary
-    bs <- arbitrary
-    bt <- arbitrary
-    bst <- arbitrary
-    sb <- arbitrary
-    mp <- arbitrary
-    ps <- arbitrary
-    cp <- arbitrary
-    hs <- arbitrary
-    return $ Gameboard sf bf sq bq ex wf sw re bs bt bst sb mp ps cp hs
+maybeSensibleAction :: Agricola -> Gen Action
+maybeSensibleAction agri
+ | _phase agri == Finished = return $ SetMessage $ finalScore agri
+maybeSensibleAction agri
+  | isNothing (isProblem agri EndPhase) = return EndPhase
+maybeSensibleAction agri
+  | isNothing (isProblem agri EndTurn) = return EndTurn
+maybeSensibleAction agri
+  | hasAnimalsInSupply agri = do
+      an <- arbitrary
+      let col = _whoseTurn agri
+      let pf | col == Red = _farm $ _red  agri
+             | otherwise = _farm $ _blue agri
+      n <- choose (0,farmrows pf)
+      m <- choose (0,farmcols pf)
+      elements [FreeAnimal an, PlaceAnimal an n m]
+maybeSensibleAction _ = arbitrary
 
 instance Arbitrary Agricola where
   arbitrary = do
-    r <- arbitrary
-    b <- arbitrary
-    g <- arbitrary
-    bo <- arbitrary
-    st <- arbitrary
-    wh <- arbitrary
-    hpw <- arbitrary
-    ph <- arbitrary
-    return $ Agricola r b g bo st wh hpw "" ph
-
-{-
-initPlayer :: Player -> Player
-initPlayer player = player &~ do
-  (supply . borders) .= 9
-  workers .= 3
-  farm .= startingFarm
+    agri <- frequency [(1, return startingState), (1000 , arbitrary)]
+    sensb <- maybeSensibleAction agri
+    return $ fromJust $ tryTakeAction agri sensb
 
 
-hasBorders :: Agricola -> Color -> Bool
-hasBorders agri color = agri ^. (player color . supply . borders) >= 1
+instance Arbitrary Good where
+  arbitrary = elements [Stone, Wood, Reed]
 
-freeSpace :: Agricola -> Color -> Alignment -> Integer -> Integer -> Bool
-freeSpace agri color al n m = not $ agri ^.
-                              (player color . farm . border al n m . isThere )
--}
+instance Arbitrary Action where
+  arbitrary = do
+    al <- arbitrary
+    al1 <- arbitrary
+    al2 <- arbitrary
+    n <- choose (0,5)
+    n1 <- choose (0,5)
+    n2 <- choose (0,5)
+    m <- choose (0,3)
+    m1 <- choose (0,3)
+    m2 <- choose (0,3)
+    animal <- arbitrary
+    build <- arbitrary
+    bool <- arbitrary
+    frequency [
+               (30 , return $ MultiAction [StartBuildingStoneWalls
+                                          , PlaceBorder al n m
+                                          , PlaceBorder al1 n1 m1
+                                          , SpendResources Stone 2
+                                          , PlaceBorder al2 n2 m2
+                                          ])
+               , (30 , return $ MultiAction [StartBuildingWoodFences
+                                          , SpendResources Wood 1
+                                          , PlaceBorder al n m
+                                          , SpendResources Wood 1
+                                          , PlaceBorder al1 n1 m1
+                                          , SpendResources Wood 1
+                                          , PlaceBorder al2 n2 m2
+                                          ])
+              , (5 , return $ PlaceBorder al n m)
+              , (5 , return  TakeResources)
+              , (5 , return  TakeSmallForest)
+              , (5 , return  TakeBigForest)
+              , (5 , return  TakeSmallQuarry)
+              , (5 , return  TakeBigQuarry)
+              , (5, return $ MultiAction [TakeMillpond, PlaceAnimal Sheep n m])
+              , (5, return $ MultiAction [TakePigsAndSheep, PlaceAnimal Pig n m])
+              , (5, return $ MultiAction [TakeHorsesAndSheep, PlaceAnimal Horse n m])
+              , (5, return $ MultiAction [TakeCowsAndPigs, PlaceAnimal Cow n m])
+              , (5 , return  TakeCowsAndPigs)
+              , (5 , return  TakeHorsesAndSheep)
+              , (5 , return $ TakeAnimal n m)
+              , (10 , return $ PlaceAnimal animal n m)
+              , (5 , return $ PlaceTrough n m )
+              , (5, return $ MultiAction [TakeExpand, PlaceExpand bool])
+              , (20 , return $ MultiAction [StartBuilding build, PlaceBuilding build n m] )
+              ]
+
+checkPoints :: Test
+checkPoints = testGroup "Points" [
+  testProperty "Positive points can be had" prop_canGetPositivePoints
+                               ]
+
 tests :: IO [Test]
-tests = return [checkBorders,checkTiles]
+tests = return [checkBorders,checkTiles, checkPoints]
