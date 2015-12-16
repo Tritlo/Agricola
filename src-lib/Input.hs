@@ -15,6 +15,7 @@ import Control.Monad.Except
 import Control.Monad.Trans.Maybe
 import Data.Function
 
+
 clickedFarm :: Agricola -> Coord -> Maybe Color
 clickedFarm agri  coord | inBox coord (farmOffset agri Blue) (farmVolume agri Blue) = Just Blue
                         | inBox coord (farmOffset agri Red) (farmVolume agri Red) = Just Red
@@ -23,8 +24,12 @@ clickedFarm agri  coord | inBox coord (farmOffset agri Blue) (farmVolume agri Bl
 (.-.) :: Coord -> Coord -> Coord
 (x1,y1) .-. (x2,y2) = (x1 - x2, y1 - y2)
 
+
+-- Checks whether the given coordinates are in the given box
+-- (with corner at bx,by and volume xv,yv)
 inBox :: Coord -> Coord -> Measurements -> Bool
 inBox (x,y) (bx,by) (xv,yv) = bx <= x && x < bx + xv && by <= y && y < by + yv
+
 
 getClicked :: Agricola -> Coord -> Maybe (Color, Either Tile Border, Coord)
 getClicked agri coords = do
@@ -47,7 +52,6 @@ getClicked agri coords = do
         getY oy hs = toInteger $ length $ takeWhile (<= oy) $ subSeqSum hs
 
 
-
 clickedBorder :: Agricola -> Coord -> Maybe (Alignment, Integer, Integer)
 clickedBorder agri (mx,my) = do
   (col, Right (Border a _), (fx,fy)) <- getClicked agri (mx,my)
@@ -59,6 +63,7 @@ clickedTile agri (mx,my) = do
   return (fromIntegral cy, fromIntegral cx)
 
 
+-- Gets the button that was possibly clicked.
 clickedControls  :: Coord -> Maybe Button
 clickedControls c@(cx,cy) =
   if inBox c controlsOffset v && tm < length defaultControls && tn < (length . head) defaultControls
@@ -97,6 +102,7 @@ getAnimalTypeFromEvent _ = Nothing
 
 
 
+-- Moves the cursor safely, to ensure no ncurses crashes
 safeMoveCursor :: Window -> Coord -> Curses ()
 safeMoveCursor w (dy,dx) = do
   (sy,sx) <- screenSize
@@ -106,6 +112,9 @@ safeMoveCursor w (dy,dx) = do
     $ updateWindow w $ (moveCursor ny nx)
 
 
+-- Gets the next event from the user.
+-- Moves the cursor on the screen to match user action
+-- to get more feedback on a mouse click.
 getNextEvent :: Window -> Curses Event
 getNextEvent w = do
   event <- waitFor w
@@ -120,6 +129,8 @@ getNextEvent w = do
     _ -> return  ()
   return event
 
+-- Displays a messages and waits for a response
+-- from the user
 dispMsgAtTopAndWaitForInput :: String -> Curses Event
 dispMsgAtTopAndWaitForInput msg = do
   (w, _,_,_) <- settings
@@ -134,7 +145,7 @@ dispMsgAtTopAndWaitForInput msg = do
   render
   getNextEvent w
 
-
+-- gets the current location of the cursor.
 getCursorCoord :: Curses (Coord)
 getCursorCoord = do
   (w, _,_,_) <- settings
@@ -143,6 +154,10 @@ getCursorCoord = do
 
 
 
+
+-- Abstracts an interaction between the user.
+-- Takes in a message to display, and a function, which, when
+-- given a coordinate, returns a action (possibly)
 interaction :: String
             -> (Agricola -> Coord -> Curses (Maybe Action))
             -> Agricola -> Curses (Maybe Action)
@@ -164,6 +179,7 @@ interaction msg click agri = do
 
 
 
+-- An interaction for choosing on which side to expand the farm.
 chooseExpandSideInteraction :: String -> Agricola -> Curses (Maybe Action)
 chooseExpandSideInteraction msg = interaction msg  click
   where click agri (mx,my) = case clickedTile agri (mx,my) of
@@ -177,31 +193,38 @@ chooseExpandSideInteraction msg = interaction msg  click
         
 
 
+-- An interaction to choose where to place a trough
 placeTroughInteraction :: String -> Agricola -> Curses (Maybe Action)
 placeTroughInteraction msg = interaction msg click
   where click agri (mx,my) = case clickedTile agri (mx,my) of
           Nothing ->  placeTroughInteraction msg agri
           Just (x,y) -> return $ Just $ PlaceTrough x y
 
+-- An interaction to choose where to place a border
 placeBorderInteraction :: String -> Agricola -> Curses (Maybe Action)
 placeBorderInteraction msg = interaction msg click
   where click agri (mx,my) = case clickedBorder agri (mx,my) of
           Nothing -> placeBorderInteraction msg agri
           Just (a,x,y) -> return $ Just $ PlaceBorder a x y
 
+-- An interaction to choose where to place a building
 placeBuildingInteraction :: Building -> String -> Agricola -> Curses (Maybe Action)
 placeBuildingInteraction b msg = interaction msg click
   where click agri (mx,my) = case clickedTile agri (mx,my) of
           Nothing -> placeBuildingInteraction b msg agri
           Just (x,y) -> return $ Just $ PlaceBuilding b x y
 
--- return Just DoNothing on nothing
+-- Asks for a tile from which it will take an animal
+-- the funny <|> and <$> ensure that we return Just DoNothing
+-- if the response was nothing.
 takeAnimalInteraction agri =  (<|> Just DoNothing) <$>
                               interaction "Choose tile to take animal from:" click agri
   where click agri (mx,my) = case clickedTile agri (mx,my) of
           Nothing -> return $ Just DoNothing
           Just (x,y) -> return $ Just $ TakeAnimal x y
 
+
+-- An interaction for choosing the resource to build with, used for stables.
 chooseResourceInteraction :: Integer -> [Good] ->  String -> Agricola -> Curses (Maybe Action)
 chooseResourceInteraction n choices msg = interaction msg click
   where click agri (mx,my) = case clickedControls (mx,my) of
@@ -209,18 +232,23 @@ chooseResourceInteraction n choices msg = interaction msg click
           _ -> chooseResourceInteraction n choices msg agri
 
 
+-- An interaction for choosing an animal. Used when getting animals
+-- for free from buildings.
 chooseAnimalInteraction :: [Animal] ->  String -> Agricola -> Curses (Maybe Action)
 chooseAnimalInteraction choices msg = interaction msg click
   where click agri (mx,my) = case clickedControls (mx,my) of
           Just (ChoiceB a _ _) | a `elem` choices -> return $ Just $ (ChooseAnimal a)
           _ -> chooseAnimalInteraction choices msg agri
 
+-- An interaction to choose which building to build.
 chooseBuildingInteraction :: String -> Agricola -> Curses (Maybe Action)
 chooseBuildingInteraction msg = interaction msg click
   where click agri (mx,my) = case clickedControls (mx,my) of
           Just (ChoiceB _ _ b) -> return $ Just $ StartBuilding b
           _ -> chooseBuildingInteraction msg agri
 
+-- Asks for an animal which you want to place, and then where you
+-- want to place it.
 placeAnimalInteraction :: Agricola -> Curses (Maybe Action)
 placeAnimalInteraction agri = do
   ev <- dispMsgAtTopAndWaitForInput "Choose animal to place:"
@@ -235,7 +263,7 @@ placeAnimalInteraction agri = do
 
 
 
-
+-- Asks for an anmial to free.
 freeAnimalInteraction :: Curses (Maybe Action)
 freeAnimalInteraction = do
   ev <- dispMsgAtTopAndWaitForInput $ unwords ["Choose animal to free"]
@@ -244,8 +272,15 @@ freeAnimalInteraction = do
     Nothing -> return $ Just DoNothing
 
 
+-- This is just to make the following line a little easier to read.
 type Interaction = String -> Agricola -> Curses (Maybe Action)
 
+
+-- Takes a list of messages, a list of costs and a lists of interactions.
+-- Displays the message, and then runs the interaction. After an answer
+-- is had, it builds up a MultiAction of the actions,
+-- putting the cost first, then the answer, then the cost again etc.
+-- Tries to bail early if there would be a propblem with taking that action.
 multiActionInteraction :: [String]
                        -> [Action]
                        -> [Interaction]
@@ -285,7 +320,7 @@ multiActionInteraction msgs costs interactions agri
 
 
 
-
+-- A series of interaction to pay wood to place troughs. First one is free.
 buildTroughInteraction :: Agricola -> Curses (Maybe Action)
 buildTroughInteraction =
   multiActionInteraction
@@ -299,6 +334,7 @@ buildTroughInteraction =
                        , "stop to finish or cancel to cancel."
                        ]
 
+-- An interaction with only a single round, to pay for stalls.
 buildStallInteraction :: Agricola -> Curses (Maybe Action)
 buildStallInteraction =
   multiActionInteraction
@@ -315,6 +351,8 @@ buildStallInteraction =
 -- We use except t to be able to throw errors nicely
 type ActionM m = MaybeT (ExceptT String m)
 
+-- Runs the ActionM monad, to get the invesre, i.e. the monad
+-- it is abstracting.
 runActionM :: Monad m => ActionM m Action -> m (Maybe Action)
 runActionM actionProducer = do
   m <- runExceptT $  runMaybeT $ actionProducer
@@ -326,6 +364,10 @@ runActionM actionProducer = do
 
 
 
+-- Asks the user for the side he wanst to expand from, and then
+-- returns the steps needed to make that happen. Is mainly to
+-- check since there might not be enough expansions, and then
+-- we only take the fences.
 expandInteraction :: Agricola -> ActionM Curses Action
 expandInteraction agri = do
   unless (hasWorkers agri && boardSpaceFree agri (TakeExpand)) $
@@ -338,6 +380,8 @@ expandInteraction agri = do
   where msg = "Pick side to expand from by clicking left or right side of farm."
 
 
+-- The interaction used when building special buildings.
+-- if any of the patternmatches fail, we just do nothing.
 buildSpecialBuildingInteraction :: Agricola -> ActionM Curses Action
 buildSpecialBuildingInteraction agri = do
   unless (hasWorkers agri && boardSpaceFree agri (StartBuilding Shelter)) $
@@ -374,6 +418,8 @@ buildSpecialBuildingInteraction agri = do
         getBP b = lift $ lift $ placeBuildingInteraction b (cht b) agri
 
 
+-- The interaction for upgrading stalls for stables.
+-- for each upgrade, the user can choose how he wishes to pay for it.
 buildStableInteraction :: Agricola -> Curses (Maybe Action)
 buildStableInteraction =
   multiActionInteraction
@@ -382,6 +428,7 @@ buildStableInteraction =
   (StartBuilding Stable : repeat DoNothing)
   (cycle  [chooseResourceInteraction 5 [Stone,Wood], placeBuildingInteraction Stable])
 
+-- The interaction for using stone to build fences. The first 2 are free.
 stoneWallInteraction :: Agricola -> Curses (Maybe Action)
 stoneWallInteraction =
   multiActionInteraction
@@ -394,6 +441,7 @@ stoneWallInteraction =
     secondmsg = "Click on border to place, stop to finish or cancel to cancel." 
     latermsg = "Click on border to place for 2 stones, stop to finish or cancel to cancel."
 
+-- The interaction for using wood to build fences.
 woodFenceInteraction :: Agricola -> Curses (Maybe Action)
 woodFenceInteraction =
   multiActionInteraction
@@ -405,6 +453,11 @@ woodFenceInteraction =
     firstmsg = "Click on border to place for 1 wood, or click stop to cancel"
     latermsg = "Click on border to place for 1 wood, stop to finish or cancel to cancel."
 
+
+-- returns an action from a mouse click. Here we decide what to do
+-- when we are not in any interaction.
+-- abstracted away to be able to use keyboard as well,
+-- using the arrow keys to navigate and the space key to click.
 mouseClick :: Coord -> Agricola -> Curses (Maybe Action)
 mouseClick (mx,my) agri =
   case clickedControls (mx,my) of
@@ -440,14 +493,15 @@ mouseClick (mx,my) agri =
     where isSomeonesTurn = agri ^. whoseTurn /= No
 
 
+-- Just displays the new size of the window.
 resized :: Curses (Maybe Action)
 resized = do
   (sx,sy) <- screenSize
   return $ Just (SetMessage ("Screen resized to " ++ show (sx,sy)))
 
-
-
-
+-- Here we define our keyboard events, and pass the
+-- mouseclick event to mouseclick. Here we define some cheats as well,
+-- to ease testing.
 getAction :: Event -> Agricola -> Curses (Maybe Action)
 getAction (EventCharacter 'q')      = const $ return Nothing
 getAction (EventCharacter 'Q')      = const $ return Nothing
@@ -482,6 +536,7 @@ getAction (EventUnknown ev)         = const $ return $ Just DoNothing
 getAction (EventMouse _ mouseState) = mouseClick (mx,my)
   where (mx,my,_) = mouseCoordinates mouseState
 
+-- This is our event waiting loop. Returns when we have some input from the user.
 waitFor :: Window -> Curses Event
 waitFor w = loop where
     loop = do
