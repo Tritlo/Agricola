@@ -7,6 +7,7 @@ module Agricola where
 
 import Control.Lens
 import Data.List
+import Data.Maybe
 import Control.Monad.State
 import Data.Char (toUpper, toLower)
 
@@ -66,10 +67,26 @@ data GlobalSupply = GlobalSupply { _troughs :: Integer
 makeLenses ''GlobalSupply
 
 emptyGlobal :: GlobalSupply
-emptyGlobal = GlobalSupply 0 0 0 0 0 0 0 0
+emptyGlobal = GlobalSupply { _troughs = 0
+                           , _stalls = 0
+                           , _expansions = 0
+                           , _globalBorders = 0
+                           , _htHouse = 0
+                           , _storage = 0
+                           , _shelter = 0
+                           , _openStables = 0
+                           }
 
 startingGlobalSupply :: GlobalSupply
-startingGlobalSupply = GlobalSupply 10 4 4 8 1 1 1 1
+startingGlobalSupply = emptyGlobal { _troughs = 10
+                                   , _stalls = 4
+                                   , _expansions = 4
+                                   , _globalBorders = 8
+                                   , _htHouse = 1
+                                   , _storage = 1
+                                   , _shelter = 1
+                                   , _openStables = 1
+                                   }
 
 globalBuildingLens
   :: Functor f =>
@@ -114,12 +131,17 @@ makeLenses ''Border
 data Tile = Tile { _building :: Maybe Building
                  , _tileanimals :: Maybe (Animal, Integer)
                  , _trough :: Bool
+                 , _expansion :: Maybe Integer
                  }
 
 makeLenses ''Tile
 
 emptyTile :: Tile
-emptyTile = Tile Nothing Nothing False
+emptyTile = Tile { _building = Nothing
+                 , _tileanimals = Nothing
+                 , _trough = False
+                 , _expansion = Nothing
+                               }
 
 data Farm = Farm { _tiles :: [[Tile]]
                  , _vborders :: [[Border]]
@@ -521,6 +543,7 @@ data Action = DoNothing
               | TakeAnimal Integer Integer
               | PlaceAnimal Animal Integer Integer
               | ChooseAnimal Animal
+              | PlaceExpand Bool
               | PlaceTrough Integer Integer
               | PlaceBuilding Building Integer Integer
               | SpendResources Good Integer
@@ -622,7 +645,7 @@ minLengthStringPrepend len str = replicate diff ' ' ++ str
     diff = len - length str
 
 instance Show Tile where
-  show (Tile bu an tro) = items
+  show Tile {_building = bu, _tileanimals = an, _trough = tro} = items
     where
       stuff = [showBu bu ,showAn an , showTro tro]
       maxl = maximum $ map length stuff
@@ -688,19 +711,36 @@ initPlayer player = player &~ do
   farm .= startingFarm
 
 
+totalNumExpansions agri = numberOfExpansions Red agri + numberOfExpansions Blue agri
 
-farmOffset :: Color -> Coord
-farmOffset Red = (2,2)
-farmOffset Blue = (70,2)
+farmOffset :: Agricola -> Color -> Coord
+farmOffset agri Red = (x,29)
+  where x = max 0 $ middle - max (numexpR+1) 3 * expXVol  - (numexpB `div` 2)*expXVol
+        expXVol = fst  (volume $ emptyFarmWrows 1) - 1
+        numexpR = numberOfExpansions Red agri
+        numexpB = numberOfExpansions Blue agri
+        numexp = 1 + totalNumExpansions agri
 
-boardOffset :: Coord
-boardOffset = (23,26)
+farmOffset agri Blue = (x,fyr)
+  where x = vxr + fxr + spacebetween
+        (vxr,vyb) = volume $ agri ^. player Red . farm
+        (fxr, fyr) = farmOffset agri Red
+        numexpR = numberOfExpansions Red agri
+        spacebetween = 24 `div` (numexpR + 1)
 
-controlsOffset :: Coord
-controlsOffset = (0,20)
 
 minScreenSize :: Coord
 minScreenSize = (47,139)
+
+middle = snd minScreenSize `div` 2
+
+
+boardOffset :: Coord
+boardOffset = (23,8)
+
+controlsOffset :: Coord
+controlsOffset = (0,2)
+
 
 data Button =   StopButton
               | EndTurnButton
@@ -735,6 +775,11 @@ defaultControls = [
    ,  CancelButton, QuitButton]
   ]
 
+
+numberOfExpansions ::  Color -> Agricola -> Integer
+numberOfExpansions col agri =
+  toInteger $ maximum  $ map fromInteger $
+  0 :  mapMaybe _expansion  (concat (agri ^. player col . farm . tiles))
 
 farmVolume :: Agricola -> Color -> Measurements
 farmVolume agri col = volume (agri ^. (player col . farm))

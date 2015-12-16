@@ -20,13 +20,14 @@ drawLines n m (l:ls) = do
 drawFarm :: Agricola -> Ag.Color -> Update Integer
 drawFarm agri col = drawLines oy ox $
                     lines $ show (agri ^. (player col . farm))
-                    where (ox,oy) = farmOffset col
+                    where (ox,oy) = farmOffset agri col
 
 
 drawSupply :: Agricola -> Ag.Color -> Integer -> Update Integer
 drawSupply agri color start =
-  drawLines (start + 1) (fst $ farmOffset color) $
+  drawLines (start + 1) (2 + fx) $
   lines $ show $ agri ^. (player color . supply)
+  where (fx,_) = farmOffset agri color
 
 
 drawBoard :: Agricola ->  Update Integer
@@ -61,7 +62,7 @@ drawControls bs = drawLines y x [
 drawPlayer agri col = do
      end <- drawFarm agri col
      end <- drawSupply agri col end
-     moveCursor (end + 1) $ fst $ farmOffset col
+     moveCursor (end + 1) $ fst $ farmOffset agri col
      drawString $ show $ agri ^. (player col . color)
      drawString $ " has " ++ show  (agri ^. (player col . workers)) ++ " workers"
      if agri ^. starting == col

@@ -41,8 +41,8 @@ farmTiles numrows = vector
 
 instance Arbitrary Farm where
   arbitrary = do
-    n <- (arbitrary :: Gen Integer) `suchThat` (> 0)
-    arbitraryFarmWithAtLeast (Positive n)
+    n <- arbitrary :: Gen (Positive Integer)
+    arbitraryFarmWithAtLeast n
 
 
 arbitraryFarmWithAtLeast :: Positive Integer -> Gen Farm

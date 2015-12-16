@@ -15,8 +15,8 @@ import Control.Monad.Except
 import Control.Monad.Trans.Maybe
 
 clickedFarm :: Agricola -> Coord -> Maybe Color
-clickedFarm agri  coord | inBox coord (farmOffset Blue) (farmVolume agri Blue) = Just Blue
-                        | inBox coord (farmOffset Red) (farmVolume agri Red) = Just Red
+clickedFarm agri  coord | inBox coord (farmOffset agri Blue) (farmVolume agri Blue) = Just Blue
+                        | inBox coord (farmOffset agri Red) (farmVolume agri Red) = Just Red
                         | otherwise = Nothing
 
 (.-.) :: Coord -> Coord -> Coord
@@ -28,7 +28,7 @@ inBox (x,y) (bx,by) (xv,yv) = bx <= x && x < bx + xv && by <= y && y < by + yv
 getClicked :: Agricola -> Coord -> Maybe (Color, Either Tile Border, Coord)
 getClicked agri coords = do
   color <-  clickedFarm agri coords
-  let offsetcoords@(ox,oy) = coords .-. farmOffset color
+  let offsetcoords@(ox,oy) = coords .-. farmOffset agri color
         where
   let farmMp = farmMap (agri ^. (player color . farm))
   let fmLs = farmMapLengths farmMp
@@ -154,6 +154,20 @@ interaction msg click agri = do
             Just CancelButton -> return Nothing
             Just QuitButton -> return Nothing
             _ -> click agri (mx,my)
+
+
+
+chooseExpandSideInteraction :: String -> Agricola -> Curses (Maybe Action)
+chooseExpandSideInteraction msg = interaction msg  click
+  where click agri (mx,my) = case clickedTile agri (mx,my) of
+          Just (_,m) -> return $ Just $ PlaceExpand (side m)
+          Nothing -> case clickedBorder agri (mx,my) of
+            Just (_,_,m) -> return $ Just $ PlaceExpand (side m)
+            Nothing -> chooseExpandSideInteraction msg agri
+          where side = (< (rows `div` 2))
+                p = agri ^. whoseTurn
+                rows = toInteger $ length $ head $ agri ^. player p . farm . tiles
+        
 
 
 placeTroughInteraction :: String -> Agricola -> Curses (Maybe Action)
@@ -304,8 +318,21 @@ runActionM actionProducer = do
       Nothing -> return $ Just DoNothing
 
 
-buildSpecialBuildingInteraction' :: Agricola -> ActionM Curses Action
-buildSpecialBuildingInteraction' agri = do
+
+expandInteraction :: Agricola -> ActionM Curses Action
+expandInteraction agri = do
+  unless (hasWorkers agri && boardSpaceFree agri (TakeExpand)) $
+    throwError $ "Cannot expand since no worker can be placed on gameboard tile."
+  if (agri ^. global . expansions >= 1)
+    then do
+    Just pe@(PlaceExpand _) <- lift $ lift $ chooseExpandSideInteraction msg agri
+    return $ MultiAction [TakeExpand, pe]
+    else return TakeExpand
+  where msg = "Pick side to expand from by clicking left or right side of farm."
+
+
+buildSpecialBuildingInteraction :: Agricola -> ActionM Curses Action
+buildSpecialBuildingInteraction agri = do
   unless (hasWorkers agri && boardSpaceFree agri (StartBuilding Shelter)) $
     throwError $ "Cannot build special building,"
                   ++" since no worker can be placed on gameboard tile."
@@ -425,7 +452,7 @@ mouseClick (mx,my) agri =
       Just SmallQuarry -> return $ Just TakeSmallQuarry
       Just BigQuarry -> return $ Just TakeBigQuarry
       Just Resources -> return $ Just TakeResources
-      Just Expand -> return $ Just TakeExpand
+      Just Expand -> runActionM $ expandInteraction agri
       Just Millpond -> return $ Just TakeMillpond
       Just PigsAndSheep -> return $ Just TakePigsAndSheep
       Just CowsAndPigs -> return $ Just TakeCowsAndPigs
@@ -435,12 +462,12 @@ mouseClick (mx,my) agri =
       Just WoodFence -> woodFenceInteraction agri
       Just BuildStall -> buildStallInteraction agri
       Just BuildStable -> buildStableInteraction agri
-      Just SpecialBuilding -> runActionM $ buildSpecialBuildingInteraction' agri
+      Just SpecialBuilding -> runActionM $ buildSpecialBuildingInteraction agri
       Nothing -> return $ Just DoNothing
     _ -> return $ Just DoNothing
     where isSomeonesTurn = agri ^. whoseTurn /= No
 
-  
+
 resized :: Curses (Maybe Action)
 resized = do
   (sx,sy) <- screenSize
@@ -454,6 +481,8 @@ getAction (EventCharacter 'q')      = const $ return Nothing
 getAction (EventCharacter 'Q')      = const $ return Nothing
 getAction (EventCharacter ' ')      = \ag -> getCursorCoord >>= (flip mouseClick ag)
 getAction (EventCharacter '\n')     = const $ return $ Just EndTurn
+getAction (EventCharacter 'e')     = const $ return $ Just EndTurn
+getAction (EventCharacter 'E')     = const $ return $ Just EndPhase
 getAction (EventCharacter 's')      = const $ return $ Just (SpendResources Stone $ -1)
 getAction (EventCharacter 'w')      = const $ return $ Just (SpendResources Wood $ -1)
 getAction (EventCharacter 'r')      = const $ return $ Just (SpendResources Reed $ -1)

@@ -202,11 +202,23 @@ takeAction TakeSmallForest = flip (&~) $ do
   playerColor <- use whoseTurn
   starting .= playerColor
 
+
+
 takeAction TakeBigForest   = takeMonoTile BigForest Wood
 takeAction TakeBigQuarry   = takeMonoTile BigQuarry Stone
 takeAction TakeSmallQuarry = takeMonoTile SmallQuarry Stone
---takeAction (PlaceExpand side)
--- taka expand úr global supply
+takeAction (PlaceExpand isLeftSide) = flip (&~) $ do
+  col <- use whoseTurn
+  expssofar <- numberOfExpansions col <$> use id
+  let  newts = replicate 3  emptyTile {_expansion = Just (expssofar + 1)}
+  global . expansions -= 1
+  player col . farm . tiles %= addTo isLeftSide newts
+  player col . farm . vborders %= addTo isLeftSide newvs
+  player col . farm . hborders %= addTo isLeftSide newhs
+  where newvs = replicate 3 (Border V False)
+        newhs = replicate 4 (Border H False)
+        addTo True new old = transpose $ new : transpose old
+        addTo False new old = transpose $ transpose old ++ [new]
 takeAction TakeExpand = takeMonoTile Expand Fence
 
 
@@ -344,6 +356,9 @@ workerActions = [ TakeResources
 isProblem :: Agricola -> Action ->  Maybe String
 isProblem agri (SetMessage _) = Nothing
 isProblem agri (ChooseAnimal _) = Nothing
+isProblem agri (PlaceExpand _) = if (agri ^. global . expansions) <= 0
+                                    then Just "there are no expansion left in the global supply."
+                                    else Nothing
 isProblem agri EndTurn = if hasWorkers agri && not (agri ^. hasPlacedWorker)
                          then Just $ show col ++ " has to place worker"
                          else if hasAnimalsInSupply agri
