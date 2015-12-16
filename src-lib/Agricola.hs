@@ -11,6 +11,8 @@ import Data.Maybe
 import Control.Monad.State
 import Data.Char (toUpper, toLower)
 
+-- Definitions of game components
+
 type Coord = (Integer, Integer)
 
 data Color = Red | Blue | No deriving (Show, Eq)
@@ -258,7 +260,6 @@ data Gameboard = Gameboard {
   , _buildTroughs :: UnitBoardTile
   , _buildStable   :: UnitBoardTile
   , _specialBuilding :: SpecialBoardTile
-  --, _specialBuilding2 :: UnitBoardTile
   , _millpond :: DuoBoardTile
   , _pigsAndSheep :: DuoBoardTile
   , _cowsAndPigs :: DuoBoardTile
@@ -328,7 +329,6 @@ tileType Resources = Unit
 tileType BuildStall = Unit
 tileType BuildTroughs = Unit
 tileType BuildStable = Unit
--- tileType SpecialBuilding = Unit
 
 tileType Millpond = Duo
 tileType PigsAndSheep = Duo
