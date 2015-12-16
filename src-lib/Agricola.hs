@@ -132,7 +132,7 @@ data Tile = Tile { _building :: Maybe Building
                  , _tileanimals :: Maybe (Animal, Integer)
                  , _trough :: Bool
                  , _isExpansion :: Bool
-                 }
+                 } deriving (Eq)
 
 makeLenses ''Tile
 

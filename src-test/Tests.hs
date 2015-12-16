@@ -33,7 +33,7 @@ instance Arbitrary Tile where
     ta <- arbitrary `suchThat` maybe True ((> 0) . snd)
     t <- arbitrary
     e <- arbitrary
-    return Tile {_building = b, _tileanimals = ta, _trough = t, _expansion = e}
+    return Tile {_building = b, _tileanimals = ta, _trough = t, _isExpansion = e}
 
 
 borderWithAl al = arbitrary `suchThat` ((al == ) ._alignment)
